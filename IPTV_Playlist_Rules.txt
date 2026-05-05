@@ -1,0 +1,95 @@
+IPTV Playlist Cleanup & Normalization Rules
+=================================
+
+Apply all rules BELOW IN ORDER.
+
+1. Remove Geo-Blocked Streams
+-----------------------------
+- Remove any channel marked with:
+  [Geo Blocked], [Geo-blocked], or similar
+- Remove the entire channel block (#EXTINF + URL)
+
+2. Remove Low-Resolution Streams
+--------------------------------
+- Remove streams below 720p:
+  240p, 270p, 360p, 480p, 540p, 576p, 684p
+- Keep:
+  720p, 1080p, 1080i, 2160p
+- If resolution is not listed, keep for now
+
+3. Prefer Highest Resolution
+----------------------------
+- If both 720p and 1080p/1080i exist:
+  → Remove all 720p versions
+- If any 1080+ version exists:
+  → Remove ALL other variants (SD, no-resolution, etc.)
+- If multiple 1080+ versions exist:
+  → Keep ONE
+  → Prefer HLS (.m3u8) over DASH (.mpd)
+
+4. Remove Exact Duplicates
+--------------------------
+- Remove entries where BOTH match:
+  - Same tvg-id
+  - Same URL
+- Keep the first occurrence
+
+5. Remove Non-English Channels
+------------------------------
+Remove if:
+- Non-ASCII characters appear in channel name
+- Name or tvg-id indicates non-English language:
+  Español, Français, Deutsch, Arabic, Russian, Vietnamese,
+  Chinese, Korean, Japanese, Hindi, etc.
+- Region markers like:
+  LATAM, Panregional, Asia, France, Russia
+
+6. Remove Religious Channels
+----------------------------
+Remove channels referencing:
+- Christian, Catholic, Church, Gospel, Faith, Praise, Worship
+- Jesus, Bible, Quran, Torah, Islam, Hindu, Buddhist
+- Known networks:
+  3ABN, CBN, TBN, EWTN, Daystar, Cornerstone, Shalom
+
+7. Remove Telemundo
+-------------------
+- Remove ALL channels containing:
+  Telemundo (case-insensitive)
+
+8. Normalize tvg-id
+-------------------
+- Convert ALL tvg-id values to empty:
+
+  tvg-id="ANYTHING" → tvg-id=""
+
+- Do NOT modify channel names, resolution, or notes
+
+Example:
+from: #EXTINF:-1 tvg-id="WNETDT1.us@SD",WNET-DT1
+to:   #EXTINF:-1 tvg-id="",WNET-DT1
+
+9. Sort Alphabetically
+----------------------
+- Sort A → Z by channel name
+- Channel name = text after comma in #EXTINF
+- Keep channel blocks intact
+
+10. Optional Stream Validation
+------------------------------
+- Test streams using ffprobe
+- Timeout limit: 10 seconds per stream
+- Mark streams as:
+  OK / FAIL / TIMEOUT
+- Optionally remove failed streams
+
+Final Output Requirements
+-------------------------
+- Valid M3U playlist
+- No duplicates
+- English-only
+- Non-religious
+- Non-geo-blocked
+- Best available quality per channel
+- tvg-id="" for all entries
+- Alphabetically sorted
