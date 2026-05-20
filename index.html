@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <title>Stream Launcher</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
   <style>
@@ -296,6 +297,7 @@
   <span class="header-title">Stream Launcher</span>
   <span class="badge" id="badge">No playlist loaded</span>
   <input type="file" id="file-in" accept=".m3u,.m3u8" style="display:none">
+  <button class="btn btn-default" onclick="promptLoadUrl()">Open URL</button>
   <button class="btn btn-primary" onclick="document.getElementById('file-in').click()">Open M3U</button>
 </header>
 
@@ -719,18 +721,29 @@ function filterBrowse() {
   renderBrowse(q ? browseItems.filter(b => b.label.toLowerCase().includes(q)) : browseItems);
 }
 
-function fetchPlaylist(filename, label) {
+function loadFromUrl(url, label, opts = {}) {
   setStatus('Fetching ' + label + '…');
-  fetch(BASE_URL + filename)
+  return fetch(url)
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
     .then(text => {
       allStreams = parseM3U(text);
       filterStreams();
       document.getElementById('badge').textContent = allStreams.length.toLocaleString() + ' streams';
       setStatus('Loaded ' + allStreams.length.toLocaleString() + ' streams — ' + label);
-      switchTab('streams');
+      if (opts.switchTab) switchTab('streams');
     })
     .catch(err => setStatus('Failed to load ' + label + ': ' + err.message));
+}
+
+function fetchPlaylist(filename, label) {
+  loadFromUrl(BASE_URL + filename, label, { switchTab: true });
+}
+
+function promptLoadUrl() {
+  const url = prompt('Enter M3U/M3U8 playlist URL:');
+  if (!url) return;
+  const trimmed = url.trim();
+  loadFromUrl(trimmed, trimmed);
 }
 
 // ── Status ────────────────────────────────────────────────
@@ -755,6 +768,9 @@ if (localStorage.getItem('sidebar-collapsed') === '1') {
   document.querySelector('.sidebar').classList.add('collapsed');
   document.getElementById('btn-toggle').innerHTML = '&#8250;';
 }
+
+const DEFAULT_M3U_URL = 'https://raw.githubusercontent.com/Tachaeon/IPTV/refs/heads/main/All_Stations_FIXED.m3u8';
+loadFromUrl(DEFAULT_M3U_URL, 'Default playlist');
 </script>
 </body>
 </html>
