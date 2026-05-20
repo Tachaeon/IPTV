@@ -192,6 +192,20 @@
     }
     .search-wrap input:focus { border-color: var(--accent); }
     .search-wrap input::placeholder { color: var(--muted); }
+    .search-wrap select {
+      width: 100%;
+      margin-top: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      padding: 5px 7px;
+      outline: none;
+      cursor: pointer;
+    }
+    .search-wrap select:focus { border-color: var(--accent); }
 
     .stream-list { flex: 1; overflow-y: auto; }
     .stream-list::-webkit-scrollbar { width: 4px; }
@@ -363,6 +377,9 @@
       <button class="tab-btn" id="tb-favs" onclick="switchTab('favs')">
         Favorites <span class="tab-count" id="cnt-favs">0</span>
       </button>
+      <button class="tab-btn" id="tb-recents" onclick="switchTab('recents')">
+        Recent <span class="tab-count" id="cnt-recents">0</span>
+      </button>
       <button class="tab-btn" id="tb-browse" onclick="switchTab('browse')">
         Browse
       </button>
@@ -371,9 +388,18 @@
     <div class="panel active" id="pnl-streams">
       <div class="search-wrap">
         <input id="q-streams" type="text" placeholder="Search streams…" oninput="filterStreams()">
+        <select id="grp-streams" onchange="filterStreams()" style="display:none">
+          <option value="">All groups</option>
+        </select>
       </div>
       <div class="stream-list" id="lst-streams">
         <div class="list-empty">Open an M3U file to load streams</div>
+      </div>
+    </div>
+
+    <div class="panel" id="pnl-recents">
+      <div class="stream-list" id="lst-recents">
+        <div class="list-empty">No recently played streams</div>
       </div>
     </div>
 
@@ -436,16 +462,23 @@ if (USE_PROXY && typeof Hls !== 'undefined') {
 }
 
 // ── State ─────────────────────────────────────────────────
-let allStreams   = [];
-let favorites   = [];
-let shownStreams = [];
-let shownFavs   = [];
-let playingUrl  = null;
-let playingName = null;
-let hlsInst     = null;
+let allStreams    = [];
+let favorites     = [];
+let recents       = [];
+let shownStreams  = [];
+let shownFavs     = [];
+let shownRecents  = [];
+let playingUrl    = null;
+let playingName   = null;
+let hlsInst       = null;
+let autoSkipTimer = null;
 
-const FAV_KEY  = 'stream-launcher-favs';
-const LAST_KEY = 'stream-launcher-last';
+const FAV_KEY   = 'stream-launcher-favs';
+const LAST_KEY  = 'stream-launcher-last';
+const REC_KEY   = 'stream-launcher-recents';
+const VOL_KEY   = 'stream-launcher-vol';
+const MUTED_KEY = 'stream-launcher-muted';
+const REC_MAX   = 10;
 
 // ── Favorites ─────────────────────────────────────────────
 function loadFavs() {
@@ -467,24 +500,48 @@ function removeFav(url) {
   if (f) setStatus('Removed from favorites: ' + f.name);
 }
 
+// ── Recents ───────────────────────────────────────────────
+function loadRecents() {
+  try { return JSON.parse(localStorage.getItem(REC_KEY) || '[]'); } catch { return []; }
+}
+function saveRecents() { localStorage.setItem(REC_KEY, JSON.stringify(recents)); }
+
+function addRecent(name, url) {
+  const meta = allStreams.find(s => s.url === url)
+            || favorites.find(s => s.url === url)
+            || recents.find(s => s.url === url) || {};
+  recents = recents.filter(r => r.url !== url);
+  recents.unshift({ name, url, logo: meta.logo || null });
+  if (recents.length > REC_MAX) recents.length = REC_MAX;
+  saveRecents();
+  refreshRecents();
+}
+
+function refreshRecents() {
+  renderList(recents, 'lst-recents', shownRecents);
+  document.getElementById('cnt-recents').textContent = recents.length;
+}
+
 // ── M3U parsing ───────────────────────────────────────────
 function parseM3U(text) {
   const lines = text.split(/\r?\n/);
   const out = [];
-  let name = null;
-  let logo = null;
+  let name = null, logo = null, group = null;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
     if (line.startsWith('#EXTINF:')) {
       const m  = line.match(/#EXTINF:[^,]*,\s*(.*)\s*$/);
       const lm = line.match(/tvg-logo="([^"]*)"/);
-      name = m  ? m[1].trim()  : null;
-      logo = lm ? lm[1] || null : null;
+      const gm = line.match(/group-title="([^"]*)"/);
+      name  = m  ? m[1].trim()  : null;
+      logo  = lm ? lm[1] || null : null;
+      group = gm ? gm[1] || null : null;
     } else if (!line.startsWith('#')) {
-      out.push({ name: name || line, url: line, logo });
+      out.push({ name: name || line, url: line, logo, group });
       name = null;
       logo = null;
+      group = null;
     }
   }
   return out;
@@ -519,9 +576,22 @@ function renderList(items, containerId, store) {
 
 function filterStreams() {
   const q = document.getElementById('q-streams').value.toLowerCase();
-  const items = q ? allStreams.filter(s => s.name.toLowerCase().includes(q)) : allStreams;
+  const g = document.getElementById('grp-streams').value;
+  let items = allStreams;
+  if (g) items = items.filter(s => s.group === g);
+  if (q) items = items.filter(s => s.name.toLowerCase().includes(q));
   renderList(items, 'lst-streams', shownStreams);
   document.getElementById('cnt-streams').textContent = items.length;
+}
+
+function refreshGroupOptions() {
+  const sel = document.getElementById('grp-streams');
+  const prev = sel.value;
+  const groups = [...new Set(allStreams.map(s => s.group).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All groups</option>' +
+    groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+  sel.value = groups.includes(prev) ? prev : '';
+  sel.style.display = groups.length ? 'block' : 'none';
 }
 
 function filterFavs() {
@@ -539,7 +609,7 @@ function refreshFavs() {
 
 // ── Tabs ──────────────────────────────────────────────────
 function switchTab(tab) {
-  ['streams', 'favs', 'browse'].forEach(t => {
+  ['streams', 'favs', 'recents', 'browse'].forEach(t => {
     document.getElementById('tb-' + t).classList.toggle('active', t === tab);
     document.getElementById('pnl-' + t).classList.toggle('active', t === tab);
   });
@@ -549,6 +619,7 @@ function switchTab(tab) {
 const vid = document.getElementById('vid');
 
 function launchCurrentInMpv() {
+  cancelAutoSkip();
   if (playingUrl) launchMpv(playingUrl, playingName || 'Stream');
 }
 
@@ -556,6 +627,8 @@ function play(url, name) {
   playingUrl  = url;
   playingName = name;
   try { localStorage.setItem(LAST_KEY, JSON.stringify({ url, name })); } catch {}
+  cancelAutoSkip();
+  addRecent(name, url);
   document.getElementById('err-overlay').classList.remove('visible');
   filterStreams();
   filterFavs();
@@ -574,10 +647,13 @@ function play(url, name) {
     hlsInst.attachMedia(vid);
     hlsInst.on(Hls.Events.MANIFEST_PARSED, () => vid.play().catch(() => {}));
     hlsInst.on(Hls.Events.ERROR, (_, d) => {
-      if (d.fatal && d.type === Hls.ErrorTypes.NETWORK_ERROR) {
+      if (!d.fatal) return;
+      if (d.type === Hls.ErrorTypes.NETWORK_ERROR) {
         hlsInst.destroy(); hlsInst = null;
         vid.src = url;
         vid.play().catch(() => {});
+      } else {
+        showError('Stream failed: ' + (d.details || d.type));
       }
     });
   } else {
@@ -590,11 +666,28 @@ function play(url, name) {
   document.getElementById('dot').classList.add('live');
 }
 
-vid.addEventListener('error', () => {
-  setStatus('Stream failed in browser');
+function showError(msg) {
+  setStatus(msg);
   document.getElementById('dot').classList.remove('live');
   document.getElementById('err-overlay').classList.add('visible');
-});
+  scheduleAutoSkip();
+}
+
+function scheduleAutoSkip() {
+  if (autoSkipTimer) return;
+  autoSkipTimer = setTimeout(() => {
+    autoSkipTimer = null;
+    setStatus('Auto-skipping to next channel…');
+    cycleChannel(1);
+  }, 3000);
+}
+
+function cancelAutoSkip() {
+  if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
+}
+
+vid.addEventListener('error', () => showError('Stream failed in browser'));
+vid.addEventListener('playing', cancelAutoSkip);
 
 // ── Event delegation on lists ─────────────────────────────
 function wireList(containerId, store) {
@@ -656,8 +749,10 @@ document.addEventListener('keydown', e => {
 
 function cycleChannel(dir) {
   const activeTab = document.querySelector('.tab-btn.active').id;
-  const onFavs = activeTab === 'tb-favs';
-  const list   = onFavs ? shownFavs : shownStreams;
+  let list, listId;
+  if (activeTab === 'tb-favs')         { list = shownFavs;    listId = 'lst-favs'; }
+  else if (activeTab === 'tb-recents') { list = shownRecents; listId = 'lst-recents'; }
+  else                                 { list = shownStreams; listId = 'lst-streams'; }
   if (!list.length) return;
 
   let idx = list.findIndex(s => s.url === playingUrl);
@@ -669,8 +764,7 @@ function cycleChannel(dir) {
   if (!next) return;
   play(next.url, next.name);
 
-  const items = document.getElementById(onFavs ? 'lst-favs' : 'lst-streams')
-    .querySelectorAll('.stream-item');
+  const items = document.getElementById(listId).querySelectorAll('.stream-item');
   if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
 }
 
@@ -690,6 +784,7 @@ document.getElementById('file-in').addEventListener('change', function () {
   const reader = new FileReader();
   reader.onload = e => {
     allStreams = parseM3U(e.target.result);
+    refreshGroupOptions();
     filterStreams();
     document.getElementById('badge').textContent = allStreams.length.toLocaleString() + ' streams';
     setStatus('Loaded ' + allStreams.length.toLocaleString() + ' streams — ' + file.name);
@@ -802,6 +897,7 @@ function loadFromUrl(url, label, opts = {}) {
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
     .then(text => {
       allStreams = parseM3U(text);
+      refreshGroupOptions();
       filterStreams();
       document.getElementById('badge').textContent = allStreams.length.toLocaleString() + ' streams';
       setStatus('Loaded ' + allStreams.length.toLocaleString() + ' streams — ' + label);
@@ -836,10 +932,21 @@ function applyTheme(name) {
 
 // ── Init ──────────────────────────────────────────────────
 favorites = loadFavs();
+recents   = loadRecents();
 wireList('lst-streams', shownStreams);
 wireList('lst-favs',    shownFavs);
+wireList('lst-recents', shownRecents);
 filterStreams();
 refreshFavs();
+refreshRecents();
+
+const savedVol = parseFloat(localStorage.getItem(VOL_KEY));
+if (!isNaN(savedVol)) vid.volume = Math.min(1, Math.max(0, savedVol));
+if (localStorage.getItem(MUTED_KEY) === '1') vid.muted = true;
+vid.addEventListener('volumechange', () => {
+  localStorage.setItem(VOL_KEY, String(vid.volume));
+  localStorage.setItem(MUTED_KEY, vid.muted ? '1' : '0');
+});
 
 document.getElementById('lst-browse').addEventListener('click', e => {
   const item = e.target.closest('.stream-item');
