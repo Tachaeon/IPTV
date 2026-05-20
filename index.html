@@ -361,6 +361,7 @@
   <span class="header-title">Stream Launcher</span>
   <span class="badge" id="badge">No playlist loaded</span>
   <input type="file" id="file-in" accept=".m3u,.m3u8" style="display:none">
+  <button class="btn-icon" id="btn-fs" onclick="toggleFullscreen()" title="Fullscreen (F)" aria-label="Fullscreen"></button>
   <select class="theme-select" id="theme-select" onchange="applyTheme(this.value)" title="Theme" aria-label="Theme">
     <option value="tokyo-night">Tokyo Night</option>
     <option value="light">Light</option>
@@ -444,7 +445,7 @@
 <footer class="footer">
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
-  <span style="margin-left:auto">Click to play &nbsp;·&nbsp; ↑/↓: change channel &nbsp;·&nbsp; Right-click: favorite &nbsp;·&nbsp; T: toggle sidebar</span>
+  <span style="margin-left:auto">Click to play &nbsp;·&nbsp; ↑/↓: change channel &nbsp;·&nbsp; Right-click: favorite &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; F: fullscreen</span>
 </footer>
 
 <div id="ctx">
@@ -744,6 +745,8 @@ document.addEventListener('keydown', e => {
   if (document.activeElement.tagName === 'INPUT') return;
   if (e.key === 't' || e.key === 'T') {
     toggleSidebar();
+  } else if (e.key === 'f' || e.key === 'F') {
+    toggleFullscreen();
   } else if (playingUrl && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
     e.preventDefault();
     cycleChannel(e.key === 'ArrowDown' ? 1 : -1);
@@ -923,6 +926,19 @@ function promptLoadUrl() {
 // ── Status ────────────────────────────────────────────────
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
+// ── Fullscreen ────────────────────────────────────────────
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(() => {});
+}
+
+function updateFsIcon() {
+  const inIcon  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+  const outIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+  document.getElementById('btn-fs').innerHTML = document.fullscreenElement ? outIcon : inIcon;
+}
+document.addEventListener('fullscreenchange', updateFsIcon);
+
 // ── Theme ─────────────────────────────────────────────────
 function applyTheme(name) {
   if (name === 'tokyo-night') {
@@ -965,6 +981,7 @@ if (localStorage.getItem('sidebar-collapsed') === '1') {
 }
 
 document.getElementById('theme-select').value = localStorage.getItem('theme') || 'tokyo-night';
+updateFsIcon();
 
 const DEFAULT_M3U_URL = 'https://raw.githubusercontent.com/Tachaeon/IPTV/refs/heads/main/All_Stations_FIXED.m3u8';
 loadFromUrl(DEFAULT_M3U_URL, 'Default playlist').then(() => {
