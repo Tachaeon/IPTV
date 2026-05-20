@@ -399,7 +399,7 @@
         <polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none"/>
       </svg>
       <p>Nothing playing</p>
-      <small>Open an M3U file, then<br>double-click a stream to play</small>
+      <small>Open an M3U file, then<br>click a stream to play</small>
     </div>
     <div class="player-wrap" id="player">
       <div class="err-overlay" id="err-overlay">
@@ -415,7 +415,7 @@
 <footer class="footer">
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
-  <span style="margin-left:auto">Double-click to play &nbsp;·&nbsp; Right-click for options &nbsp;·&nbsp; T: toggle sidebar</span>
+  <span style="margin-left:auto">Click to play &nbsp;·&nbsp; ↑/↓: change channel &nbsp;·&nbsp; Right-click: favorite &nbsp;·&nbsp; T: toggle sidebar</span>
 </footer>
 
 <div id="ctx">
@@ -444,7 +444,8 @@ let playingUrl  = null;
 let playingName = null;
 let hlsInst     = null;
 
-const FAV_KEY = 'stream-launcher-favs';
+const FAV_KEY  = 'stream-launcher-favs';
+const LAST_KEY = 'stream-launcher-last';
 
 // ── Favorites ─────────────────────────────────────────────
 function loadFavs() {
@@ -554,6 +555,7 @@ function launchCurrentInMpv() {
 function play(url, name) {
   playingUrl  = url;
   playingName = name;
+  try { localStorage.setItem(LAST_KEY, JSON.stringify({ url, name })); } catch {}
   document.getElementById('err-overlay').classList.remove('visible');
   filterStreams();
   filterFavs();
@@ -598,7 +600,7 @@ vid.addEventListener('error', () => {
 function wireList(containerId, store) {
   const el = document.getElementById(containerId);
 
-  el.addEventListener('dblclick', e => {
+  el.addEventListener('click', e => {
     const item = e.target.closest('.stream-item');
     if (!item) return;
     const s = store[+item.dataset.i];
@@ -642,9 +644,35 @@ function showCtx(e, url, name) {
 function hideCtx() { ctxEl.style.display = 'none'; }
 document.addEventListener('click', hideCtx);
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') hideCtx();
-  if ((e.key === 't' || e.key === 'T') && document.activeElement.tagName !== 'INPUT') toggleSidebar();
+  if (e.key === 'Escape') { hideCtx(); return; }
+  if (document.activeElement.tagName === 'INPUT') return;
+  if (e.key === 't' || e.key === 'T') {
+    toggleSidebar();
+  } else if (playingUrl && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    cycleChannel(e.key === 'ArrowDown' ? 1 : -1);
+  }
 });
+
+function cycleChannel(dir) {
+  const activeTab = document.querySelector('.tab-btn.active').id;
+  const onFavs = activeTab === 'tb-favs';
+  const list   = onFavs ? shownFavs : shownStreams;
+  if (!list.length) return;
+
+  let idx = list.findIndex(s => s.url === playingUrl);
+  idx = idx === -1
+    ? (dir > 0 ? 0 : list.length - 1)
+    : (idx + dir + list.length) % list.length;
+
+  const next = list[idx];
+  if (!next) return;
+  play(next.url, next.name);
+
+  const items = document.getElementById(onFavs ? 'lst-favs' : 'lst-streams')
+    .querySelectorAll('.stream-item');
+  if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
+}
 
 // ── Sidebar toggle ────────────────────────────────────────
 function toggleSidebar() {
@@ -829,7 +857,14 @@ if (localStorage.getItem('sidebar-collapsed') === '1') {
 document.getElementById('theme-select').value = localStorage.getItem('theme') || 'tokyo-night';
 
 const DEFAULT_M3U_URL = 'https://raw.githubusercontent.com/Tachaeon/IPTV/refs/heads/main/All_Stations_FIXED.m3u8';
-loadFromUrl(DEFAULT_M3U_URL, 'Default playlist');
+loadFromUrl(DEFAULT_M3U_URL, 'Default playlist').then(() => {
+  try {
+    const last = JSON.parse(localStorage.getItem(LAST_KEY) || 'null');
+    if (!last || !last.url) return;
+    const found = allStreams.find(s => s.url === last.url);
+    if (found) play(found.url, found.name);
+  } catch {}
+});
 </script>
 </body>
 </html>
