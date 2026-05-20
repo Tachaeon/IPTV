@@ -149,7 +149,7 @@
     .tab-bar { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .tab-btn {
       flex: 1;
-      padding: 9px 6px;
+      padding: 9px 4px;
       font-size: 12px;
       font-weight: 500;
       color: var(--muted);
@@ -157,6 +157,9 @@
       border: none;
       border-bottom: 2px solid transparent;
       transition: color 0.12s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
     .tab-btn:hover:not(.active) { color: var(--text); }
@@ -375,7 +378,7 @@
         Streams <span class="tab-count" id="cnt-streams">0</span>
       </button>
       <button class="tab-btn" id="tb-favs" onclick="switchTab('favs')">
-        Favorites <span class="tab-count" id="cnt-favs">0</span>
+        Favs <span class="tab-count" id="cnt-favs">0</span>
       </button>
       <button class="tab-btn" id="tb-recents" onclick="switchTab('recents')">
         Recent <span class="tab-count" id="cnt-recents">0</span>
