@@ -5,22 +5,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <title>Stream Launcher</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem('theme');
+      if (t && t !== 'tokyo-night') document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #1a1b26;
-      --bg-alt:   #16161e;
-      --surface:  #1f2335;
-      --hover:    #292e42;
-      --border:   #292e42;
-      --text:     #c0caf5;
-      --muted:    #565f89;
-      --accent:   #7aa2f7;
-      --green:    #9ece6a;
-      --red:      #f7768e;
-      --sidebar:  272px;
+      --bg:        #1a1b26;
+      --bg-alt:    #16161e;
+      --surface:   #1f2335;
+      --hover:     #292e42;
+      --border:    #292e42;
+      --text:      #c0caf5;
+      --muted:     #565f89;
+      --accent:    #7aa2f7;
+      --green:     #9ece6a;
+      --red:       #f7768e;
+      --on-accent: #1a1b26;
+      --sidebar:   272px;
+    }
+
+    [data-theme="light"] {
+      --bg:        #ffffff;
+      --bg-alt:    #f7f7f8;
+      --surface:   #f0f1f3;
+      --hover:     #e4e6ea;
+      --border:    #d8dade;
+      --text:      #1f2024;
+      --muted:     #6b7280;
+      --accent:    #2563eb;
+      --green:     #16a34a;
+      --red:       #dc2626;
+      --on-accent: #ffffff;
+    }
+
+    [data-theme="gruvbox"] {
+      --bg:        #1d2021;
+      --bg-alt:    #282828;
+      --surface:   #3c3836;
+      --hover:     #504945;
+      --border:    #504945;
+      --text:      #ebdbb2;
+      --muted:     #928374;
+      --accent:    #fabd2f;
+      --green:     #b8bb26;
+      --red:       #fb4934;
+      --on-accent: #1d2021;
     }
 
     html, body { height: 100%; }
@@ -66,7 +101,19 @@
     }
     .btn-default { background: var(--surface); color: var(--text); }
     .btn-default:hover { background: var(--hover); }
-    .btn-primary { background: var(--accent); color: #1a1b26; border-color: var(--accent); font-weight: 600; }
+    .theme-select {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      outline: none;
+    }
+    .theme-select:hover { background: var(--hover); }
+    .btn-primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
     .btn-primary:hover { filter: brightness(1.1); }
 
     /* ── Layout ─────────────────────────────────────── */
@@ -229,7 +276,7 @@
     .err-overlay p { font-size: 14px; color: var(--muted); }
     .err-overlay .btn-mpv {
       background: var(--accent);
-      color: #1a1b26;
+      color: var(--on-accent);
       border: none;
       border-radius: 6px;
       padding: 9px 22px;
@@ -297,6 +344,11 @@
   <span class="header-title">Stream Launcher</span>
   <span class="badge" id="badge">No playlist loaded</span>
   <input type="file" id="file-in" accept=".m3u,.m3u8" style="display:none">
+  <select class="theme-select" id="theme-select" onchange="applyTheme(this.value)" title="Theme" aria-label="Theme">
+    <option value="tokyo-night">Tokyo Night</option>
+    <option value="light">Light</option>
+    <option value="gruvbox">Gruvbox</option>
+  </select>
   <button class="btn btn-default" onclick="promptLoadUrl()">Open URL</button>
   <button class="btn btn-primary" onclick="document.getElementById('file-in').click()">Open M3U</button>
 </header>
@@ -367,9 +419,6 @@
 </footer>
 
 <div id="ctx">
-  <button id="ctx-play">&#9654; Play in browser</button>
-  <button id="ctx-mpv">&#9654; Open in mpv</button>
-  <hr>
   <button id="ctx-fav"></button>
 </div>
 
@@ -575,8 +624,6 @@ function launchMpv(url, name) {
 }
 
 function showCtx(e, url, name) {
-  document.getElementById('ctx-play').onclick = () => { play(url, name); hideCtx(); };
-  document.getElementById('ctx-mpv').onclick  = () => { launchMpv(url, name); hideCtx(); };
   const btn = document.getElementById('ctx-fav');
   if (isFav(url)) {
     btn.textContent = '★ Remove from Favorites';
@@ -749,6 +796,16 @@ function promptLoadUrl() {
 // ── Status ────────────────────────────────────────────────
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
+// ── Theme ─────────────────────────────────────────────────
+function applyTheme(name) {
+  if (name === 'tokyo-night') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', name);
+  }
+  localStorage.setItem('theme', name);
+}
+
 // ── Init ──────────────────────────────────────────────────
 favorites = loadFavs();
 wireList('lst-streams', shownStreams);
@@ -768,6 +825,8 @@ if (localStorage.getItem('sidebar-collapsed') === '1') {
   document.querySelector('.sidebar').classList.add('collapsed');
   document.getElementById('btn-toggle').innerHTML = '&#8250;';
 }
+
+document.getElementById('theme-select').value = localStorage.getItem('theme') || 'tokyo-night';
 
 const DEFAULT_M3U_URL = 'https://raw.githubusercontent.com/Tachaeon/IPTV/refs/heads/main/All_Stations_FIXED.m3u8';
 loadFromUrl(DEFAULT_M3U_URL, 'Default playlist');
