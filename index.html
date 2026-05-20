@@ -131,6 +131,21 @@
       transition: width 0.22s ease, min-width 0.22s ease;
     }
     .sidebar.collapsed { width: 0; min-width: 0; }
+    .sidebar.dragging { transition: none; }
+    .sidebar-resizer {
+      position: absolute;
+      top: 0;
+      right: -3px;
+      width: 6px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 5;
+      background: transparent;
+      transition: background 0.12s;
+    }
+    .sidebar-resizer:hover, .sidebar.dragging .sidebar-resizer { background: var(--accent); }
+    .sidebar.collapsed .sidebar-resizer { display: none; }
+    .sidebar { position: relative; }
 
     .btn-icon {
       width: 32px; height: 32px;
@@ -242,6 +257,15 @@
       text-overflow: ellipsis;
       min-width: 0;
     }
+    .failed-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+      margin-left: 4px;
+    }
+    .stream-item.failed .stream-label { opacity: 0.55; }
 
     .list-empty {
       padding: 28px 12px;
@@ -361,6 +385,7 @@
   <span class="header-title">Stream Launcher</span>
   <span class="badge" id="badge">No playlist loaded</span>
   <input type="file" id="file-in" accept=".m3u,.m3u8" style="display:none">
+  <button class="btn-icon" onclick="playRandom()" title="Random channel (R)" aria-label="Random channel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
   <button class="btn-icon" id="btn-fs" onclick="toggleFullscreen()" title="Fullscreen (F)" aria-label="Fullscreen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <select class="theme-select" id="theme-select" onchange="applyTheme(this.value)" title="Theme" aria-label="Theme">
     <option value="tokyo-night">Tokyo Night</option>
@@ -369,11 +394,13 @@
   </select>
   <button class="btn btn-default" onclick="promptLoadUrl()">Open URL</button>
   <button class="btn btn-primary" onclick="document.getElementById('file-in').click()">Open M3U</button>
+  <button class="btn btn-default" onclick="resetAllSettings()" title="Clear favorites, recents, theme, and all saved data">Reset</button>
 </header>
 
 <div class="layout">
 
   <aside class="sidebar">
+    <div class="sidebar-resizer" id="sb-resizer"></div>
     <div class="tab-bar">
       <button class="tab-btn active" id="tb-streams" onclick="switchTab('streams')">
         Streams <span class="tab-count" id="cnt-streams">0</span>
@@ -445,7 +472,7 @@
 <footer class="footer">
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
-  <span style="margin-left:auto">Click to play &nbsp;·&nbsp; ↑/↓: change channel &nbsp;·&nbsp; Right-click: favorite &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; F: fullscreen</span>
+  <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
 </footer>
 
 <div id="ctx">
@@ -469,6 +496,7 @@ if (USE_PROXY && typeof Hls !== 'undefined') {
 let allStreams    = [];
 let favorites     = [];
 let recents       = [];
+let failed        = new Set();
 let shownStreams  = [];
 let shownFavs     = [];
 let shownRecents  = [];
@@ -477,12 +505,16 @@ let playingName   = null;
 let hlsInst       = null;
 let autoSkipTimer = null;
 
-const FAV_KEY   = 'stream-launcher-favs';
-const LAST_KEY  = 'stream-launcher-last';
-const REC_KEY   = 'stream-launcher-recents';
-const VOL_KEY   = 'stream-launcher-vol';
-const MUTED_KEY = 'stream-launcher-muted';
-const REC_MAX   = 10;
+const FAV_KEY    = 'stream-launcher-favs';
+const LAST_KEY   = 'stream-launcher-last';
+const REC_KEY    = 'stream-launcher-recents';
+const VOL_KEY    = 'stream-launcher-vol';
+const MUTED_KEY  = 'stream-launcher-muted';
+const FAILED_KEY = 'stream-launcher-failed';
+const SIDE_W_KEY = 'stream-launcher-sidebar-width';
+const REC_MAX    = 10;
+const SIDE_MIN   = 180;
+const SIDE_MAX   = 600;
 
 // ── Favorites ─────────────────────────────────────────────
 function loadFavs() {
@@ -502,6 +534,47 @@ function removeFav(url) {
   favorites = favorites.filter(f => f.url !== url);
   saveFavs(); refreshFavs();
   if (f) setStatus('Removed from favorites: ' + f.name);
+}
+
+// ── Failed marks ──────────────────────────────────────────
+function loadFailed() {
+  try { return new Set(JSON.parse(localStorage.getItem(FAILED_KEY) || '[]')); } catch { return new Set(); }
+}
+function saveFailed() { localStorage.setItem(FAILED_KEY, JSON.stringify([...failed])); }
+
+function markFailed(url) {
+  if (!url || failed.has(url)) return;
+  failed.add(url);
+  saveFailed();
+  filterStreams(); filterFavs(); refreshRecents();
+}
+function unmarkFailed(url) {
+  if (!url || !failed.has(url)) return;
+  failed.delete(url);
+  saveFailed();
+  filterStreams(); filterFavs(); refreshRecents();
+}
+
+// ── Random ────────────────────────────────────────────────
+function playRandom() {
+  const activeTab = document.querySelector('.tab-btn.active').id;
+  let list;
+  if (activeTab === 'tb-favs')         list = shownFavs;
+  else if (activeTab === 'tb-recents') list = shownRecents;
+  else                                 list = shownStreams;
+  if (!list.length) { setStatus('Nothing to pick from'); return; }
+  const pool = list.filter(s => s.url !== playingUrl);
+  const choices = pool.length ? pool : list;
+  const pick = choices[Math.floor(Math.random() * choices.length)];
+  play(pick.url, pick.name);
+}
+
+// ── Reset ─────────────────────────────────────────────────
+function resetAllSettings() {
+  if (!confirm('Clear all favorites, recents, failed-stream marks, theme, volume, and saved sidebar size, then reload?')) return;
+  [FAV_KEY, LAST_KEY, REC_KEY, VOL_KEY, MUTED_KEY, FAILED_KEY, SIDE_W_KEY, 'theme', 'sidebar-collapsed']
+    .forEach(k => localStorage.removeItem(k));
+  location.reload();
 }
 
 // ── Recents ───────────────────────────────────────────────
@@ -574,7 +647,10 @@ function renderList(items, containerId, store) {
     const logo = s.logo && s.logo.startsWith('http')
       ? `<img class="stream-logo" src="${esc(s.logo)}" loading="lazy" onerror="this.style.visibility='hidden'" alt="">`
       : '';
-    return `<div class="stream-item${s.url === playingUrl ? ' playing' : ''}" data-i="${i}" title="${esc(s.name)}">${logo}<span class="stream-label">${esc(s.name)}</span></div>`;
+    const isFailed = failed.has(s.url);
+    const dot = isFailed ? '<span class="failed-dot" title="Previously failed"></span>' : '';
+    const cls = 'stream-item' + (s.url === playingUrl ? ' playing' : '') + (isFailed ? ' failed' : '');
+    return `<div class="${cls}" data-i="${i}" title="${esc(s.name)}">${logo}<span class="stream-label">${esc(s.name)}</span>${dot}</div>`;
   }).join('');
 }
 
@@ -674,6 +750,7 @@ function showError(msg) {
   setStatus(msg);
   document.getElementById('dot').classList.remove('live');
   document.getElementById('err-overlay').classList.add('visible');
+  markFailed(playingUrl);
   scheduleAutoSkip();
 }
 
@@ -691,7 +768,10 @@ function cancelAutoSkip() {
 }
 
 vid.addEventListener('error', () => showError('Stream failed in browser'));
-vid.addEventListener('playing', cancelAutoSkip);
+vid.addEventListener('playing', () => {
+  cancelAutoSkip();
+  unmarkFailed(playingUrl);
+});
 
 // ── Event delegation on lists ─────────────────────────────
 function wireList(containerId, store) {
@@ -747,6 +827,8 @@ document.addEventListener('keydown', e => {
     toggleSidebar();
   } else if (e.key === 'f' || e.key === 'F') {
     toggleFullscreen();
+  } else if (e.key === 'r' || e.key === 'R') {
+    playRandom();
   } else if (playingUrl && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
     e.preventDefault();
     cycleChannel(e.key === 'ArrowDown' ? 1 : -1);
@@ -952,6 +1034,38 @@ function applyTheme(name) {
 // ── Init ──────────────────────────────────────────────────
 favorites = loadFavs();
 recents   = loadRecents();
+failed    = loadFailed();
+
+// Sidebar resize: restore + drag
+const savedSideW = parseFloat(localStorage.getItem(SIDE_W_KEY));
+if (!isNaN(savedSideW)) {
+  document.documentElement.style.setProperty('--sidebar', Math.max(SIDE_MIN, Math.min(SIDE_MAX, savedSideW)) + 'px');
+}
+(function () {
+  const sb = document.querySelector('.sidebar');
+  const handle = document.getElementById('sb-resizer');
+  let dragging = false;
+  handle.addEventListener('mousedown', e => {
+    if (sb.classList.contains('collapsed')) return;
+    dragging = true;
+    sb.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const w = Math.max(SIDE_MIN, Math.min(SIDE_MAX, e.clientX));
+    document.documentElement.style.setProperty('--sidebar', w + 'px');
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    sb.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    const w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar'));
+    if (!isNaN(w)) localStorage.setItem(SIDE_W_KEY, w);
+  });
+})();
 wireList('lst-streams', shownStreams);
 wireList('lst-favs',    shownFavs);
 wireList('lst-recents', shownRecents);
