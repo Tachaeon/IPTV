@@ -498,7 +498,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.4.5</span>
+  <span class="version" id="version">v0.4.6</span>
 </footer>
 
 <div id="ctx">
@@ -695,6 +695,22 @@ function parseM3U(text) {
     }
   }
   return out;
+}
+
+// ── Channel name normalization ────────────────────────────
+// Strips quality/format suffixes so "BBC One (720p)" and "BBC One HD" both
+// reduce to "bbc one" for name-based logo matching.
+function normalizeChannelName(name) {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .replace(/\s*\(\s*\d+\s*p\s*\)\s*/gi, ' ')   // (720p), (1080p), (576p)
+    .replace(/\s*\(\s*4\s*k\s*\)\s*/gi, ' ')     // (4K)
+    .replace(/\s*\[[^\]]*\]\s*/g, ' ')           // [Geo-blocked], [Not 24/7]
+    .replace(/\b(uhd|fhd|hd|sd)\b/gi, ' ')       // trailing quality markers
+    .replace(/[^a-z0-9 &]+/g, ' ')               // strip punctuation except & and spaces
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // ── HTML escape ───────────────────────────────────────────
@@ -1180,6 +1196,23 @@ async function loadFromSources(opts = {}) {
     if (meta.logo)     s.logo     = meta.logo;
     if (meta.group)    s.group    = meta.group;
     if (meta.language) s.language = meta.language;
+  });
+
+  // Fallback: name-based logo match for streams still missing a logo.
+  // Build a normalized-name → logo map from anything that has a logo, then
+  // backfill streams whose URL didn't appear in the region metadata.
+  const nameLogoMap = new Map();
+  const addNameLogo = s => {
+    if (!s.logo) return;
+    const key = normalizeChannelName(s.name);
+    if (key && !nameLogoMap.has(key)) nameLogoMap.set(key, s.logo);
+  };
+  streamMap.forEach(addNameLogo);
+  metaMap.forEach(addNameLogo);
+  streamMap.forEach(s => {
+    if (s.logo) return;
+    const key = normalizeChannelName(s.name);
+    if (key && nameLogoMap.has(key)) s.logo = nameLogoMap.get(key);
   });
 
   allStreams = [...streamMap.values()]
