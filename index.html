@@ -467,7 +467,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.3.0</span>
+  <span class="version" id="version">v0.3.1</span>
 </footer>
 
 <div id="ctx">
@@ -522,7 +522,9 @@ const SOURCES = [
   'https://iptv-org.github.io/iptv/countries/us.m3u',
   'https://iptv-org.github.io/iptv/countries/uk.m3u',
   'https://iptv-org.github.io/iptv/countries/ca.m3u',
-  'https://iptv-org.github.io/iptv/regions/oce.m3u'
+  'https://iptv-org.github.io/iptv/regions/oce.m3u',
+  // Listed last so its richer metadata (station logos) wins all collisions
+  'https://iptv-org.github.io/iptv/regions/amer.m3u'
 ];
 
 // ── Favorites ─────────────────────────────────────────────
