@@ -230,47 +230,31 @@
       cursor: pointer;
     }
     .search-wrap select:focus { border-color: var(--accent); }
-    .filters { margin-top: 6px; }
-    .filters summary {
-      cursor: pointer;
-      font-size: 11px;
-      color: var(--muted);
-      list-style: none;
-      user-select: none;
-      padding: 2px 0;
-    }
-    .filters summary::-webkit-details-marker { display: none; }
-    .filters summary::before {
-      content: '▸';
-      display: inline-block;
-      width: 12px;
-      font-size: 9px;
-    }
-    .filters[open] summary::before { content: '▾'; }
-    .filters summary:hover { color: var(--text); }
-    .filter-count { font-size: 10px; opacity: 0.8; }
-    .filter-row {
+    .filter-chips {
       display: flex;
-      flex-direction: column;
-      gap: 3px;
-      margin-top: 4px;
-      padding-left: 12px;
-      font-size: 11px;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
     }
-    .filter-row label {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      cursor: pointer;
+    .chip {
+      font-family: inherit;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: transparent;
       color: var(--muted);
-      user-select: none;
-    }
-    .filter-row label:hover { color: var(--text); }
-    .filter-row input[type="checkbox"] {
-      margin: 0;
       cursor: pointer;
-      accent-color: var(--accent);
+      user-select: none;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
     }
+    .chip:hover { color: var(--text); border-color: var(--muted); }
+    .chip.active {
+      background: var(--accent);
+      color: var(--on-accent);
+      border-color: var(--accent);
+    }
+    .chip.active:hover { filter: brightness(1.08); color: var(--on-accent); }
 
     .stream-list { flex: 1; overflow-y: auto; }
     .stream-list::-webkit-scrollbar { width: 4px; }
@@ -458,15 +442,12 @@
         <select id="grp-streams" onchange="filterStreams()" style="display:none">
           <option value="">All groups</option>
         </select>
-        <details class="filters">
-          <summary>Hide categories <span class="filter-count" id="filter-count">(0)</span></summary>
-          <div class="filter-row">
-            <label><input type="checkbox" id="f-pluto"  onchange="onFilterChange()"> Pluto</label>
-            <label><input type="checkbox" id="f-shop"   onchange="onFilterChange()"> Shopping</label>
-            <label><input type="checkbox" id="f-rel"    onchange="onFilterChange()"> Religious</label>
-            <label><input type="checkbox" id="f-noneng" onchange="onFilterChange()"> Non-English</label>
-          </div>
-        </details>
+        <div class="filter-chips" title="Highlighted = hiding that category. Click to toggle.">
+          <button type="button" class="chip" data-filter="pluto"  onclick="toggleFilter('pluto')">Pluto</button>
+          <button type="button" class="chip" data-filter="shop"   onclick="toggleFilter('shop')">Shopping</button>
+          <button type="button" class="chip" data-filter="rel"    onclick="toggleFilter('rel')">Religious</button>
+          <button type="button" class="chip" data-filter="noneng" onclick="toggleFilter('noneng')">Non-Eng</button>
+        </div>
       </div>
       <div class="stream-list" id="lst-streams">
         <div class="list-empty">Open an M3U file to load streams</div>
@@ -517,7 +498,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.4.3</span>
+  <span class="version" id="version">v0.4.4</span>
 </footer>
 
 <div id="ctx">
@@ -734,27 +715,24 @@ function loadFilterState() {
     return saved ? { ...defaults, ...saved } : defaults;
   } catch { return defaults; }
 }
+function getFilterChip(key) {
+  return document.querySelector('.chip[data-filter="' + key + '"]');
+}
+function isFilterActive(key) {
+  const c = getFilterChip(key);
+  return !!(c && c.classList.contains('active'));
+}
 function saveFilterState() {
   const state = {};
-  Object.keys(FILTER_PREDICATES).forEach(k => {
-    state[k] = document.getElementById('f-' + k).checked;
-  });
+  Object.keys(FILTER_PREDICATES).forEach(k => { state[k] = isFilterActive(k); });
   localStorage.setItem(FILTERS_KEY, JSON.stringify(state));
 }
-function onFilterChange() {
+function toggleFilter(key) {
+  const c = getFilterChip(key);
+  if (!c) return;
+  c.classList.toggle('active');
   saveFilterState();
-  updateFilterCount();
   filterStreams();
-}
-
-function updateFilterCount() {
-  let n = 0;
-  Object.keys(FILTER_PREDICATES).forEach(k => {
-    const cb = document.getElementById('f-' + k);
-    if (cb && cb.checked) n++;
-  });
-  const el = document.getElementById('filter-count');
-  if (el) el.textContent = `(${n})`;
 }
 
 function filterStreams() {
@@ -764,8 +742,7 @@ function filterStreams() {
   if (g) items = items.filter(s => s.group === g);
   if (q) items = items.filter(s => s.name.toLowerCase().includes(q));
   Object.keys(FILTER_PREDICATES).forEach(k => {
-    const cb = document.getElementById('f-' + k);
-    if (cb && cb.checked) items = items.filter(s => !FILTER_PREDICATES[k](s));
+    if (isFilterActive(k)) items = items.filter(s => !FILTER_PREDICATES[k](s));
   });
   renderList(items, 'lst-streams', shownStreams);
   document.getElementById('cnt-streams').textContent = items.length;
@@ -1226,10 +1203,9 @@ failed    = loadFailed();
 
 const _filterState = loadFilterState();
 Object.keys(_filterState).forEach(k => {
-  const cb = document.getElementById('f-' + k);
-  if (cb) cb.checked = _filterState[k];
+  const c = getFilterChip(k);
+  if (c) c.classList.toggle('active', !!_filterState[k]);
 });
-updateFilterCount();
 
 // Sidebar resize: restore + drag
 const savedSideW = parseFloat(localStorage.getItem(SIDE_W_KEY));
