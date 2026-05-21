@@ -530,7 +530,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.4</span>
+  <span class="version" id="version">v0.5.5</span>
 </footer>
 
 <div id="ctx">
@@ -608,10 +608,25 @@ const SIDE_MAX   = 600;
 
 // Stream sources — the actual playlists we load channels from
 const STREAM_SOURCES = [
+  // United States
   'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us.m3u',
+  // United Kingdom
   'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/uk.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/uk_bbc.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/uk_distro.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/uk_pluto.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/uk_sportstribal.m3u',
+  // Canada
   'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/ca.m3u',
-  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/au.m3u'
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/ca_pluto.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/ca_samsung.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/ca_stingray.m3u',
+  // Australia
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/au.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/au_samsung.m3u',
+  // New Zealand
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/nz.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/nz_samsung.m3u'
 ];
 
 // Logo-only sources — fetched alongside, matched by URL to enrich stream logos
