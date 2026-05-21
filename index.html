@@ -467,7 +467,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.2.1</span>
+  <span class="version" id="version">v0.2.2</span>
 </footer>
 
 <div id="ctx">
@@ -1134,7 +1134,13 @@ loadFromUrl(DEFAULT_M3U_URL, 'Default playlist').then(() => {
     const last = JSON.parse(localStorage.getItem(LAST_KEY) || 'null');
     if (!last || !last.url) return;
     const found = allStreams.find(s => s.url === last.url);
-    if (found) play(found.url, found.name);
+    if (!found) return;
+    play(found.url, found.name);
+    const idx = shownStreams.findIndex(s => s.url === found.url);
+    if (idx !== -1) {
+      const items = document.getElementById('lst-streams').querySelectorAll('.stream-item');
+      if (items[idx]) items[idx].scrollIntoView({ block: 'center' });
+    }
   } catch {}
 });
 </script>
