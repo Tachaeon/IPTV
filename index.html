@@ -82,7 +82,15 @@
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .header-title { font-size: 14px; font-weight: 600; flex: 1; }
+    .header-title { font-size: 14px; font-weight: 600; }
+    .version {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: normal;
+      margin-left: 4px;
+      flex: 1;
+      cursor: help;
+    }
     .badge {
       font-size: 11px;
       color: var(--muted);
@@ -372,6 +380,7 @@
 <header class="header">
   <button class="btn-icon" id="btn-toggle" onclick="toggleSidebar()" title="Toggle sidebar (T)">&#8249;</button>
   <span class="header-title">Stream Launcher</span>
+  <span class="version" id="version">v0.1.0</span>
   <span class="badge" id="badge">No playlist loaded</span>
   <input type="file" id="file-in" accept=".m3u,.m3u8" style="display:none">
   <button class="btn-icon" onclick="playRandom()" title="Random channel (R)" aria-label="Random channel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
@@ -1100,6 +1109,7 @@ if (localStorage.getItem('sidebar-collapsed') === '1') {
 
 document.getElementById('theme-select').value = localStorage.getItem('theme') || 'tokyo-night';
 updateFsIcon();
+document.getElementById('version').title = 'Last modified: ' + document.lastModified;
 
 loadFromUrl(DEFAULT_M3U_URL, 'Default playlist').then(() => {
   try {
