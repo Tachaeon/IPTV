@@ -26,15 +26,17 @@ streams, so HTTPS playback is free.
 
 1. **Sign up** at <https://dash.cloudflare.com/sign-up> (free, no card).
 2. From the dashboard left sidebar, click **Workers & Pages**.
-3. Click **Create application** → **Create Worker**.
-4. Name it (e.g. `iptv-proxy`). This becomes the subdomain
-   of your worker URL. Click **Deploy** to publish the stub.
-5. On the worker page, click **Edit code** (top right).
-6. **Replace** the entire `worker.js` contents in the editor with the
-   contents of `worker.js` from this folder.
-7. Click **Save and deploy** (top right).
-8. Copy the URL shown above the editor — it will look like:
-   `https://iptv-proxy.your-subdomain.workers.dev`
+3. Click **Create** (or **Create application**).
+4. On the "Ship something new" screen, pick **Start with Hello World!**.
+5. **Name** the worker (e.g. `iptv-proxy`) — this becomes the URL
+   subdomain. Click **Deploy** to publish the default stub.
+6. On the next screen, click **Edit code** (top right, or via
+   **Continue to project → Edit code**).
+7. **Select all** in the editor and **delete** the default contents.
+8. **Paste** the contents of `worker.js` from this folder.
+9. Click **Save and deploy** in the top right.
+10. Copy the URL shown above the editor — it will look like:
+    `https://iptv-proxy.your-subdomain.workers.dev`
 
 ## Wiring the web app
 

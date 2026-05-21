@@ -498,7 +498,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.0</span>
+  <span class="version" id="version">v0.5.1</span>
 </footer>
 
 <div id="ctx">
@@ -509,7 +509,7 @@
 // ── Proxy routing ─────────────────────────────────────────
 // Cloudflare Worker URL for proxying mixed-content / CORS-blocked streams.
 // See cloudflare-worker/README.md for deployment. Leave empty to disable.
-const PROXY_URL = '';
+const PROXY_URL = 'https://iptv-proxy.tachaeon.workers.dev';
 
 const isLocalDev = location.protocol === 'http:' && location.hostname === 'localhost';
 
