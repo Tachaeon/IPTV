@@ -467,7 +467,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.4.0</span>
+  <span class="version" id="version">v0.4.1</span>
 </footer>
 
 <div id="ctx">
@@ -613,7 +613,7 @@ function refreshRecents() {
 function parseM3U(text) {
   const lines = text.split(/\r?\n/);
   const out = [];
-  let name = null, logo = null, group = null;
+  let name = null, logo = null, group = null, lang = null;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
@@ -621,14 +621,17 @@ function parseM3U(text) {
       const m  = line.match(/#EXTINF:[^,]*,\s*(.*)\s*$/);
       const lm = line.match(/tvg-logo="([^"]*)"/);
       const gm = line.match(/group-title="([^"]*)"/);
-      name  = m  ? m[1].trim()  : null;
-      logo  = lm ? lm[1] || null : null;
-      group = gm ? gm[1] || null : null;
+      const langM = line.match(/tvg-language="([^"]*)"/);
+      name  = m     ? m[1].trim()      : null;
+      logo  = lm    ? lm[1] || null    : null;
+      group = gm    ? gm[1] || null    : null;
+      lang  = langM ? langM[1] || null : null;
     } else if (!line.startsWith('#')) {
-      out.push({ name: name || line, url: line, logo, group });
+      out.push({ name: name || line, url: line, logo, group, language: lang });
       name = null;
       logo = null;
       group = null;
+      lang = null;
     }
   }
   return out;
@@ -1053,7 +1056,7 @@ async function loadFromSources(opts = {}) {
   );
 
   const streamMap = new Map();
-  const logoMap = new Map();
+  const metaMap = new Map();
   let okStreams = 0, okLogos = 0, fail = 0;
 
   results.forEach((r, i) => {
@@ -1066,15 +1069,30 @@ async function loadFromSources(opts = {}) {
     if (isStreamSrc) okStreams++; else okLogos++;
     parseM3U(r.value).forEach(s => {
       if (isStreamSrc) streamMap.set(s.url, s);
-      else if (s.logo) logoMap.set(s.url, s.logo);
+      else metaMap.set(s.url, s);
     });
   });
 
-  // Overlay logo-feed images onto matching stream URLs (regions metadata is curated)
-  streamMap.forEach(s => { if (logoMap.has(s.url)) s.logo = logoMap.get(s.url); });
+  // Overlay region metadata (logos, group titles, languages) onto matching stream URLs
+  streamMap.forEach(s => {
+    const meta = metaMap.get(s.url);
+    if (!meta) return;
+    if (meta.logo)     s.logo     = meta.logo;
+    if (meta.group)    s.group    = meta.group;
+    if (meta.language) s.language = meta.language;
+  });
+
+  const SHOP_NAME_RE  = /\b(qvc|hsn|shop ?hq|jewelry ?tv|home ?shopping|teleshop|evine)\b/i;
+  const SHOP_GROUP_RE = /shopping|teleshop/i;
+  const REL_NAME_RE   = /\b(tbn|cbn|ewtn|3abn|daystar|god ?tv|trinity broadcasting|hillsong|hope channel|christian|catholic|gospel|worship|faith ?tv|jctv|bishop|inspiration network|salvation army)\b/i;
+  const REL_GROUP_RE  = /religious|religion|spiritual/i;
+  const isPluto      = s => /pluto/i.test(s.url) || /pluto/i.test(s.name || '');
+  const isShopping   = s => SHOP_GROUP_RE.test(s.group || '') || SHOP_NAME_RE.test(s.name || '');
+  const isReligious  = s => REL_GROUP_RE.test(s.group || '') || REL_NAME_RE.test(s.name || '');
+  const isNonEnglish = s => s.language && !/\b(eng|en|english)\b/i.test(s.language);
 
   allStreams = [...streamMap.values()]
-    .filter(s => !/pluto/i.test(s.url) && !/pluto/i.test(s.name || ''))
+    .filter(s => !isPluto(s) && !isShopping(s) && !isReligious(s) && !isNonEnglish(s))
     .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
   refreshGroupOptions();
   filterStreams();
