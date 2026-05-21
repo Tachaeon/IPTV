@@ -257,6 +257,35 @@
     .chip.active:hover { filter: brightness(1.08); color: var(--on-accent); }
 
     .stream-list { flex: 1; overflow-y: auto; }
+    .list-and-strip {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+    .list-and-strip .stream-list { flex: 1; min-width: 0; }
+    .az-jump {
+      width: 14px;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      background: var(--bg);
+      border-left: 1px solid var(--border);
+      padding: 2px 0;
+    }
+    .az-jump button {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font: inherit;
+      font-size: 9px;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .az-jump button:hover:not(:disabled) { color: var(--accent); }
+    .az-jump button:disabled { opacity: 0.25; cursor: default; }
     .stream-list::-webkit-scrollbar { width: 4px; }
     .stream-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     .stream-list::-webkit-scrollbar-track { background: transparent; }
@@ -449,8 +478,11 @@
           <button type="button" class="chip" data-filter="noneng" onclick="toggleFilter('noneng')">Non-Eng</button>
         </div>
       </div>
-      <div class="stream-list" id="lst-streams">
-        <div class="list-empty">Open an M3U file to load streams</div>
+      <div class="list-and-strip">
+        <div class="stream-list" id="lst-streams">
+          <div class="list-empty">Open an M3U file to load streams</div>
+        </div>
+        <div class="az-jump" id="az-jump-streams"></div>
       </div>
     </div>
 
@@ -498,7 +530,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.2</span>
+  <span class="version" id="version">v0.5.3</span>
 </footer>
 
 <div id="ctx">
@@ -823,6 +855,30 @@ function filterStreams() {
   });
   renderList(items, 'lst-streams', shownStreams);
   document.getElementById('cnt-streams').textContent = items.length;
+  updateAzJump();
+}
+
+const AZ_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+let _azFirstIdx = {};
+
+function updateAzJump() {
+  const strip = document.getElementById('az-jump-streams');
+  if (!strip) return;
+  _azFirstIdx = {};
+  shownStreams.forEach((s, i) => {
+    const c = (s.name || '').trim().charAt(0).toUpperCase();
+    if (c >= 'A' && c <= 'Z' && !(c in _azFirstIdx)) _azFirstIdx[c] = i;
+  });
+  strip.innerHTML = AZ_LETTERS.map(L =>
+    `<button data-letter="${L}"${L in _azFirstIdx ? '' : ' disabled'}>${L}</button>`
+  ).join('');
+}
+
+function jumpToLetter(letter) {
+  const idx = _azFirstIdx[letter];
+  if (idx === undefined) return;
+  const items = document.getElementById('lst-streams').querySelectorAll('.stream-item');
+  if (items[idx]) items[idx].scrollIntoView({ block: 'start' });
 }
 
 function refreshGroupOptions() {
@@ -1344,6 +1400,11 @@ if (localStorage.getItem(MUTED_KEY) === '1') vid.muted = true;
 vid.addEventListener('volumechange', () => {
   localStorage.setItem(VOL_KEY, String(vid.volume));
   localStorage.setItem(MUTED_KEY, vid.muted ? '1' : '0');
+});
+
+document.getElementById('az-jump-streams').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-letter]');
+  if (btn && !btn.disabled) jumpToLetter(btn.dataset.letter);
 });
 
 document.getElementById('lst-browse').addEventListener('click', e => {
