@@ -315,17 +315,6 @@
     }
     .err-overlay.visible { display: flex; }
     .err-overlay p { font-size: 14px; color: var(--muted); }
-    .err-overlay .btn-mpv {
-      background: var(--accent);
-      color: var(--on-accent);
-      border: none;
-      border-radius: 6px;
-      padding: 9px 22px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .err-overlay .btn-mpv:hover { filter: brightness(1.1); }
 
     #vid {
       flex: 1;
@@ -460,8 +449,7 @@
     </div>
     <div class="player-wrap" id="player">
       <div class="err-overlay" id="err-overlay">
-        <p>Stream failed to load in browser</p>
-        <button class="btn-mpv" onclick="launchCurrentInMpv()">Open in mpv</button>
+        <p>Stream failed to load</p>
       </div>
       <video id="vid" controls></video>
     </div>
@@ -515,6 +503,8 @@ const SIDE_W_KEY = 'stream-launcher-sidebar-width';
 const REC_MAX    = 10;
 const SIDE_MIN   = 180;
 const SIDE_MAX   = 600;
+
+const DEFAULT_M3U_URL = 'https://raw.githubusercontent.com/Tachaeon/IPTV/refs/heads/main/All_Stations_FIXED.m3u8';
 
 // ── Favorites ─────────────────────────────────────────────
 function loadFavs() {
@@ -698,11 +688,6 @@ function switchTab(tab) {
 // ── Playback ──────────────────────────────────────────────
 const vid = document.getElementById('vid');
 
-function launchCurrentInMpv() {
-  cancelAutoSkip();
-  if (playingUrl) launchMpv(playingUrl, playingName || 'Stream');
-}
-
 function play(url, name) {
   playingUrl  = url;
   playingName = name;
@@ -776,8 +761,11 @@ vid.addEventListener('playing', () => {
 // ── Event delegation on lists ─────────────────────────────
 function wireList(containerId, store) {
   const el = document.getElementById(containerId);
+  let lpTimer = null;
+  let lpFired = false;
 
   el.addEventListener('click', e => {
+    if (lpFired) { lpFired = false; e.preventDefault(); return; }
     const item = e.target.closest('.stream-item');
     if (!item) return;
     const s = store[+item.dataset.i];
@@ -791,16 +779,28 @@ function wireList(containerId, store) {
     const s = store[+item.dataset.i];
     if (s) showCtx(e, s.url, s.name);
   });
+
+  el.addEventListener('touchstart', e => {
+    const item = e.target.closest('.stream-item');
+    if (!item) return;
+    const t = e.touches[0];
+    const cx = t.clientX, cy = t.clientY;
+    lpTimer = setTimeout(() => {
+      lpTimer = null;
+      lpFired = true;
+      const s = store[+item.dataset.i];
+      if (s) showCtx({ clientX: cx, clientY: cy, preventDefault: () => {} }, s.url, s.name);
+    }, 500);
+  }, { passive: true });
+
+  const cancelLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+  el.addEventListener('touchend', cancelLp);
+  el.addEventListener('touchmove', cancelLp);
+  el.addEventListener('touchcancel', cancelLp);
 }
 
 // ── Context menu ──────────────────────────────────────────
 const ctxEl = document.getElementById('ctx');
-
-function launchMpv(url, name) {
-  fetch('/launch?url=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(name))
-    .then(r => setStatus(r.ok ? 'Launched in mpv: ' + name : 'mpv not found — check $mpvPath in serve.ps1'))
-    .catch(() => setStatus('mpv launch unavailable — run via serve.ps1'));
-}
 
 function showCtx(e, url, name) {
   const btn = document.getElementById('ctx-fav');
@@ -953,16 +953,19 @@ const PLAYLIST_FILES = [
 ];
 
 const _rn = new Intl.DisplayNames(['en'], { type: 'region' });
-const browseItems = PLAYLIST_FILES.map(f => {
-  const parts = f.replace('.m3u', '').split('_');
-  const cc = parts[0] === 'uk' ? 'GB' : parts[0].toUpperCase();
-  let country = cc;
-  try { country = _rn.of(cc) || cc; } catch {}
-  const label = parts.length > 1
-    ? country + ' — ' + (PROVIDER_MAP[parts.slice(1).join('_')] || parts.slice(1).join(' '))
-    : country;
-  return { filename: f, label };
-});
+const browseItems = [
+  { filename: '__DEFAULT__', label: '★ All Stations FIXED (Default)' },
+  ...PLAYLIST_FILES.map(f => {
+    const parts = f.replace('.m3u', '').split('_');
+    const cc = parts[0] === 'uk' ? 'GB' : parts[0].toUpperCase();
+    let country = cc;
+    try { country = _rn.of(cc) || cc; } catch {}
+    const label = parts.length > 1
+      ? country + ' — ' + (PROVIDER_MAP[parts.slice(1).join('_')] || parts.slice(1).join(' '))
+      : country;
+    return { filename: f, label };
+  })
+];
 let shownBrowse = [...browseItems];
 
 function renderBrowse(items) {
@@ -995,7 +998,8 @@ function loadFromUrl(url, label, opts = {}) {
 }
 
 function fetchPlaylist(filename, label) {
-  loadFromUrl(BASE_URL + filename, label, { switchTab: true });
+  const url = filename === '__DEFAULT__' ? DEFAULT_M3U_URL : (BASE_URL + filename);
+  loadFromUrl(url, label, { switchTab: true });
 }
 
 function promptLoadUrl() {
@@ -1097,7 +1101,6 @@ if (localStorage.getItem('sidebar-collapsed') === '1') {
 document.getElementById('theme-select').value = localStorage.getItem('theme') || 'tokyo-night';
 updateFsIcon();
 
-const DEFAULT_M3U_URL = 'https://raw.githubusercontent.com/Tachaeon/IPTV/refs/heads/main/All_Stations_FIXED.m3u8';
 loadFromUrl(DEFAULT_M3U_URL, 'Default playlist').then(() => {
   try {
     const last = JSON.parse(localStorage.getItem(LAST_KEY) || 'null');

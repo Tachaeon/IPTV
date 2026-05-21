@@ -8,8 +8,7 @@
     and opens the browser automatically on start.
 
     Special routes:
-      GET /launch?url=<url>&title=<title>  — launches mpv.exe with the given stream
-      GET /proxy?url=<url>                 — proxies the URL server-side (CORS bypass)
+      GET /proxy?url=<url>  — proxies the URL server-side (CORS bypass)
 
     All_Stations.m3u is injected into index.html at request time so it auto-loads.
 
@@ -22,9 +21,8 @@
 
 #requires -version 5.1
 
-$port    = 8090
-$root    = $PSScriptRoot
-$mpvPath = 'C:\Install\MPV\mpv.exe'   # edit if mpv is elsewhere
+$port = 8090
+$root = $PSScriptRoot
 
 $mime = @{
     '.html' = 'text/html; charset=utf-8'
@@ -52,26 +50,6 @@ try {
 
         $localPath = $ctx.Request.Url.LocalPath.TrimStart('/')
         $res       = $ctx.Response
-
-        # /launch?url=...&title=... — fire mpv for streams the browser can't play
-        if ($localPath -eq 'launch') {
-            $url   = $ctx.Request.QueryString['url']
-            $title = $ctx.Request.QueryString['title']
-            if ($url -and (Test-Path $mpvPath -PathType Leaf)) {
-                $safeTitle = if ($title) { $title -replace '"', '\"' } else { 'Stream' }
-                $safeUrl   = $url -replace '"', '\"'
-                Start-Process -FilePath $mpvPath -ArgumentList "--force-window=yes --title=`"$safeTitle`" `"$safeUrl`""
-                $body = [System.Text.Encoding]::UTF8.GetBytes('ok')
-            } else {
-                $res.StatusCode = 503
-                $body = [System.Text.Encoding]::UTF8.GetBytes("mpv not found at: $mpvPath")
-            }
-            $res.ContentType     = 'text/plain'
-            $res.ContentLength64 = $body.Length
-            $res.OutputStream.Write($body, 0, $body.Length)
-            $res.Close()
-            continue
-        }
 
         # /proxy?url=... — fetch URL server-side so the browser avoids CORS restrictions
         if ($localPath -eq 'proxy') {
