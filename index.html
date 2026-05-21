@@ -531,7 +531,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.6</span>
+  <span class="version" id="version">v0.5.7</span>
 </footer>
 
 <div id="ctx">
@@ -611,6 +611,38 @@ const SIDE_MAX   = 600;
 const STREAM_SOURCES = [
   // United States
   'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_30a.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_3abn.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_abcnews.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_afrolandtv.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_amagi.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_canelatv.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_cbsn.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_cineversetv.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_distro.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_firetv.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_frequency.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_glewedtv.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_klowdtv.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_local.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_malimartv.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_pbs.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_plex.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_pluto.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_roku.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_samsung.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_sofast.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_ssh101.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_stirr.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_tcl.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_tubi.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_tvpass.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_uplynk.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_vegasplus.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_vizio.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_wfmz.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_wowza.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us_xumo.m3u',
   // United Kingdom
   'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/uk.m3u',
   'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/uk_bbc.m3u',
@@ -1160,7 +1192,9 @@ const PROVIDER_MAP = {
   'cctv':'CCTV','cgtn':'CGTN','yeslivetv':'YesLiveTV','lenz':'Lenz','telewebion':'Telewebion',
   'wnslive':'WNSLive','happywatch99':'HappyWatch99','sportstribal':'SportsTribal','distro':'Distro',
   'sofast':'Sofast','frequency':'Frequency','glewedtv':'GlewedTV','klowdtv':'KlowdTV',
-  'moveonjoy':'MoveOnJoy','cineversetv':'CineverseTV','30a':'30A','3abn':'3ABN','112114':'112114'
+  'moveonjoy':'MoveOnJoy','cineversetv':'CineverseTV','30a':'30A','3abn':'3ABN','112114':'112114',
+  'stingray':'Stingray','afrolandtv':'AfrolandTV','malimartv':'MalimarTV','tvpass':'TVPass',
+  'uplynk':'UpLynk','vegasplus':'Vegas Plus','vizio':'Vizio','wowza':'Wowza'
 };
 
 const PLAYLIST_FILES = [
@@ -1205,13 +1239,13 @@ const PLAYLIST_FILES = [
   'so.m3u','so_premiumfree.m3u','sr.m3u','st.m3u','sv.m3u','sx.m3u','sy.m3u',
   'td.m3u','tg.m3u','th.m3u','th_v2hcdn.m3u','tj.m3u','tl.m3u','tm.m3u','tn.m3u',
   'tr.m3u','tr_gem.m3u','tr_onetv.m3u','tt.m3u','tw.m3u','tz.m3u','ua.m3u','ug.m3u',
-  'uk.m3u','uk_bbc.m3u','uk_pluto.m3u','uk_rakuten.m3u','uk_samsung.m3u','uk_sportstribal.m3u',
-  'us.m3u','us_30a.m3u','us_3abn.m3u','us_abcnews.m3u','us_amagi.m3u','us_canelatv.m3u',
+  'uk.m3u','uk_bbc.m3u','uk_distro.m3u','uk_pluto.m3u','uk_rakuten.m3u','uk_samsung.m3u','uk_sportstribal.m3u',
+  'us.m3u','us_30a.m3u','us_3abn.m3u','us_abcnews.m3u','us_afrolandtv.m3u','us_amagi.m3u','us_canelatv.m3u',
   'us_cbsn.m3u','us_cineversetv.m3u','us_distro.m3u','us_firetv.m3u','us_frequency.m3u',
-  'us_glewedtv.m3u','us_klowdtv.m3u','us_local.m3u','us_moveonjoy.m3u','us_pbs.m3u',
+  'us_glewedtv.m3u','us_klowdtv.m3u','us_local.m3u','us_malimartv.m3u','us_moveonjoy.m3u','us_pbs.m3u',
   'us_plex.m3u','us_pluto.m3u','us_roku.m3u','us_samsung.m3u','us_sofast.m3u',
   'us_ssh101.m3u','us_stirr.m3u','us_tcl.m3u','us_tubi.m3u','us_tvpass.m3u',
-  'us_vizio.m3u','us_wfmz.m3u','us_xumo.m3u',
+  'us_uplynk.m3u','us_vegasplus.m3u','us_vizio.m3u','us_wfmz.m3u','us_wowza.m3u','us_xumo.m3u',
   'uy.m3u','uz.m3u','va.m3u','ve.m3u','vg.m3u','vi.m3u','vn.m3u','ws.m3u',
   'xk.m3u','ye.m3u','yt.m3u','za.m3u','za_freevisiontv.m3u','zm.m3u','zw.m3u'
 ];
