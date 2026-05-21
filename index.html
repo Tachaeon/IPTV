@@ -230,6 +230,27 @@
       cursor: pointer;
     }
     .search-wrap select:focus { border-color: var(--accent); }
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      margin-top: 6px;
+      font-size: 11px;
+    }
+    .filter-row label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      color: var(--muted);
+      user-select: none;
+    }
+    .filter-row label:hover { color: var(--text); }
+    .filter-row input[type="checkbox"] {
+      margin: 0;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
 
     .stream-list { flex: 1; overflow-y: auto; }
     .stream-list::-webkit-scrollbar { width: 4px; }
@@ -417,6 +438,12 @@
         <select id="grp-streams" onchange="filterStreams()" style="display:none">
           <option value="">All groups</option>
         </select>
+        <div class="filter-row">
+          <label><input type="checkbox" id="f-pluto"  onchange="onFilterChange()"> Hide Pluto</label>
+          <label><input type="checkbox" id="f-shop"   onchange="onFilterChange()"> Hide Shopping</label>
+          <label><input type="checkbox" id="f-rel"    onchange="onFilterChange()"> Hide Religious</label>
+          <label><input type="checkbox" id="f-noneng" onchange="onFilterChange()"> Hide Non-English</label>
+        </div>
       </div>
       <div class="stream-list" id="lst-streams">
         <div class="list-empty">Open an M3U file to load streams</div>
@@ -467,7 +494,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.4.1</span>
+  <span class="version" id="version">v0.4.2</span>
 </footer>
 
 <div id="ctx">
@@ -582,7 +609,7 @@ function playRandom() {
 // ── Reset ─────────────────────────────────────────────────
 function resetAllSettings() {
   if (!confirm('Clear all favorites, recents, failed-stream marks, theme, volume, and saved sidebar size, then reload?')) return;
-  [FAV_KEY, LAST_KEY, REC_KEY, VOL_KEY, MUTED_KEY, FAILED_KEY, SIDE_W_KEY, 'theme', 'sidebar-collapsed']
+  [FAV_KEY, LAST_KEY, REC_KEY, VOL_KEY, MUTED_KEY, FAILED_KEY, SIDE_W_KEY, FILTERS_KEY, 'theme', 'sidebar-collapsed']
     .forEach(k => localStorage.removeItem(k));
   location.reload();
 }
@@ -667,12 +694,45 @@ function renderList(items, containerId, store) {
   }).join('');
 }
 
+const FILTER_PREDICATES = {
+  pluto:  s => /pluto/i.test(s.url) || /pluto/i.test(s.name || ''),
+  shop:   s => /shopping|teleshop/i.test(s.group || '')
+            || /\b(qvc|hsn|shop ?hq|jewelry ?tv|home ?shopping|teleshop|evine)\b/i.test(s.name || ''),
+  rel:    s => /religious|religion|spiritual/i.test(s.group || '')
+            || /\b(tbn|cbn|ewtn|3abn|daystar|god ?tv|trinity broadcasting|hillsong|hope channel|christian|catholic|gospel|worship|faith ?tv|jctv|bishop|inspiration network|salvation army)\b/i.test(s.name || ''),
+  noneng: s => s.language && !/\b(eng|en|english)\b/i.test(s.language)
+};
+const FILTERS_KEY = 'stream-launcher-filters';
+
+function loadFilterState() {
+  const defaults = { pluto: true, shop: true, rel: true, noneng: true };
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTERS_KEY) || 'null');
+    return saved ? { ...defaults, ...saved } : defaults;
+  } catch { return defaults; }
+}
+function saveFilterState() {
+  const state = {};
+  Object.keys(FILTER_PREDICATES).forEach(k => {
+    state[k] = document.getElementById('f-' + k).checked;
+  });
+  localStorage.setItem(FILTERS_KEY, JSON.stringify(state));
+}
+function onFilterChange() {
+  saveFilterState();
+  filterStreams();
+}
+
 function filterStreams() {
   const q = document.getElementById('q-streams').value.toLowerCase();
   const g = document.getElementById('grp-streams').value;
   let items = allStreams;
   if (g) items = items.filter(s => s.group === g);
   if (q) items = items.filter(s => s.name.toLowerCase().includes(q));
+  Object.keys(FILTER_PREDICATES).forEach(k => {
+    const cb = document.getElementById('f-' + k);
+    if (cb && cb.checked) items = items.filter(s => !FILTER_PREDICATES[k](s));
+  });
   renderList(items, 'lst-streams', shownStreams);
   document.getElementById('cnt-streams').textContent = items.length;
 }
@@ -1082,17 +1142,7 @@ async function loadFromSources(opts = {}) {
     if (meta.language) s.language = meta.language;
   });
 
-  const SHOP_NAME_RE  = /\b(qvc|hsn|shop ?hq|jewelry ?tv|home ?shopping|teleshop|evine)\b/i;
-  const SHOP_GROUP_RE = /shopping|teleshop/i;
-  const REL_NAME_RE   = /\b(tbn|cbn|ewtn|3abn|daystar|god ?tv|trinity broadcasting|hillsong|hope channel|christian|catholic|gospel|worship|faith ?tv|jctv|bishop|inspiration network|salvation army)\b/i;
-  const REL_GROUP_RE  = /religious|religion|spiritual/i;
-  const isPluto      = s => /pluto/i.test(s.url) || /pluto/i.test(s.name || '');
-  const isShopping   = s => SHOP_GROUP_RE.test(s.group || '') || SHOP_NAME_RE.test(s.name || '');
-  const isReligious  = s => REL_GROUP_RE.test(s.group || '') || REL_NAME_RE.test(s.name || '');
-  const isNonEnglish = s => s.language && !/\b(eng|en|english)\b/i.test(s.language);
-
   allStreams = [...streamMap.values()]
-    .filter(s => !isPluto(s) && !isShopping(s) && !isReligious(s) && !isNonEnglish(s))
     .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
   refreshGroupOptions();
   filterStreams();
@@ -1139,6 +1189,12 @@ function applyTheme(name) {
 favorites = loadFavs();
 recents   = loadRecents();
 failed    = loadFailed();
+
+const _filterState = loadFilterState();
+Object.keys(_filterState).forEach(k => {
+  const cb = document.getElementById('f-' + k);
+  if (cb) cb.checked = _filterState[k];
+});
 
 // Sidebar resize: restore + drag
 const savedSideW = parseFloat(localStorage.getItem(SIDE_W_KEY));
