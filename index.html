@@ -498,7 +498,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.4.6</span>
+  <span class="version" id="version">v0.5.0</span>
 </footer>
 
 <div id="ctx">
@@ -506,13 +506,30 @@
 </div>
 
 <script>
-// ── Proxy loader (routes all HLS.js fetches through serve.ps1 to bypass CORS) ──
-const USE_PROXY = location.protocol === 'http:' && location.hostname === 'localhost';
+// ── Proxy routing ─────────────────────────────────────────
+// Cloudflare Worker URL for proxying mixed-content / CORS-blocked streams.
+// See cloudflare-worker/README.md for deployment. Leave empty to disable.
+const PROXY_URL = '';
+
+const isLocalDev = location.protocol === 'http:' && location.hostname === 'localhost';
+
+// Returns the URL to actually fetch — either the original or a proxied version.
+//   - localhost: always route through serve.ps1's /proxy (CORS bypass for dev)
+//   - production: route http:// streams through the Cloudflare Worker (mixed-content fix)
+//   - everything else: pass through unchanged
+function maybeProxy(url) {
+  if (isLocalDev) return '/proxy?url=' + encodeURIComponent(url);
+  if (PROXY_URL && /^http:\/\//i.test(url)) {
+    return PROXY_URL + '/?url=' + encodeURIComponent(url);
+  }
+  return url;
+}
+
 let ProxyLoader = null;
-if (USE_PROXY && typeof Hls !== 'undefined') {
+if (typeof Hls !== 'undefined') {
   ProxyLoader = class extends Hls.DefaultConfig.loader {
     load(ctx, cfg, cb) {
-      ctx.url = '/proxy?url=' + encodeURIComponent(ctx.url);
+      ctx.url = maybeProxy(ctx.url);
       super.load(ctx, cfg, cb);
     }
   };
@@ -854,7 +871,7 @@ function play(url, name) {
       if (!d.fatal) return;
       if (d.type === Hls.ErrorTypes.NETWORK_ERROR) {
         hlsInst.destroy(); hlsInst = null;
-        vid.src = url;
+        vid.src = maybeProxy(url);
         vid.play().catch(() => {});
       } else {
         showError('Stream failed: ' + (d.details || d.type));
@@ -862,7 +879,7 @@ function play(url, name) {
     });
   } else {
     // Safari (native HLS) or direct streams
-    vid.src = url;
+    vid.src = maybeProxy(url);
     vid.play().catch(() => {});
   }
 
