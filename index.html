@@ -467,7 +467,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.2.2</span>
+  <span class="version" id="version">v0.3.0</span>
 </footer>
 
 <div id="ctx">
@@ -511,7 +511,19 @@ const REC_MAX    = 10;
 const SIDE_MIN   = 180;
 const SIDE_MAX   = 600;
 
-const DEFAULT_M3U_URL = 'https://raw.githubusercontent.com/Tachaeon/IPTV/refs/heads/main/All_Stations_FIXED.m3u8';
+// Combined sources. Listed bottom wins on URL-dedupe collisions.
+const SOURCES = [
+  // Raw per-country playlists from iptv-org repo
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/uk.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/ca.m3u',
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/au.m3u',
+  // Aggregated country/region views (these win duplicates against the raw streams above)
+  'https://iptv-org.github.io/iptv/countries/us.m3u',
+  'https://iptv-org.github.io/iptv/countries/uk.m3u',
+  'https://iptv-org.github.io/iptv/countries/ca.m3u',
+  'https://iptv-org.github.io/iptv/regions/oce.m3u'
+];
 
 // ── Favorites ─────────────────────────────────────────────
 function loadFavs() {
@@ -981,7 +993,7 @@ const PLAYLIST_FILES = [
 
 const _rn = new Intl.DisplayNames(['en'], { type: 'region' });
 const browseItems = [
-  { filename: '__DEFAULT__', label: '★ All Stations FIXED (Default)' },
+  { filename: '__DEFAULT__', label: '★ Combined Sources (Default)' },
   ...PLAYLIST_FILES.map(f => {
     const parts = f.replace('.m3u', '').split('_');
     const cc = parts[0] === 'uk' ? 'GB' : parts[0].toUpperCase();
@@ -1025,8 +1037,38 @@ function loadFromUrl(url, label, opts = {}) {
 }
 
 function fetchPlaylist(filename, label) {
-  const url = filename === '__DEFAULT__' ? DEFAULT_M3U_URL : (BASE_URL + filename);
-  loadFromUrl(url, label, { switchTab: true });
+  if (filename === '__DEFAULT__') {
+    loadFromSources(SOURCES, { switchTab: true });
+  } else {
+    loadFromUrl(BASE_URL + filename, label, { switchTab: true });
+  }
+}
+
+async function loadFromSources(urls, opts = {}) {
+  setStatus('Fetching ' + urls.length + ' sources…');
+  const results = await Promise.allSettled(
+    urls.map(u => fetch(u).then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))))
+  );
+
+  const map = new Map();
+  let ok = 0, fail = 0;
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') {
+      ok++;
+      parseM3U(r.value).forEach(s => map.set(s.url, s));
+    } else {
+      fail++;
+      console.warn('Source failed:', urls[i], r.reason);
+    }
+  });
+
+  allStreams = [...map.values()];
+  refreshGroupOptions();
+  filterStreams();
+  document.getElementById('badge').textContent = allStreams.length.toLocaleString() + ' streams';
+  const tail = fail ? ` (${fail} source${fail === 1 ? '' : 's'} failed)` : '';
+  setStatus(`Loaded ${allStreams.length.toLocaleString()} streams from ${ok} source${ok === 1 ? '' : 's'}${tail}`);
+  if (opts.switchTab) switchTab('streams');
 }
 
 function promptLoadUrl() {
@@ -1129,7 +1171,7 @@ document.getElementById('theme-select').value = localStorage.getItem('theme') ||
 updateFsIcon();
 document.getElementById('version').title = 'Last modified: ' + document.lastModified;
 
-loadFromUrl(DEFAULT_M3U_URL, 'Default playlist').then(() => {
+loadFromSources(SOURCES).then(() => {
   try {
     const last = JSON.parse(localStorage.getItem(LAST_KEY) || 'null');
     if (!last || !last.url) return;
