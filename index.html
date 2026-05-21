@@ -467,7 +467,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.1.0</span>
+  <span class="version" id="version">v0.2.0</span>
 </footer>
 
 <div id="ctx">
@@ -770,9 +770,22 @@ function wireList(containerId, store) {
   const el = document.getElementById(containerId);
   let lpTimer = null;
   let lpFired = false;
+  let lpStartX = 0, lpStartY = 0;
+
+  const cancelLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+
+  const startLp = (item, cx, cy) => {
+    lpStartX = cx; lpStartY = cy;
+    lpTimer = setTimeout(() => {
+      lpTimer = null;
+      lpFired = true;
+      const s = store[+item.dataset.i];
+      if (s) showCtx({ clientX: cx, clientY: cy, preventDefault: () => {} }, s.url, s.name);
+    }, 500);
+  };
 
   el.addEventListener('click', e => {
-    if (lpFired) { lpFired = false; e.preventDefault(); return; }
+    if (lpFired) { lpFired = false; e.stopPropagation(); e.preventDefault(); return; }
     const item = e.target.closest('.stream-item');
     if (!item) return;
     const s = store[+item.dataset.i];
@@ -787,20 +800,27 @@ function wireList(containerId, store) {
     if (s) showCtx(e, s.url, s.name);
   });
 
+  // Mouse long-press
+  el.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    const item = e.target.closest('.stream-item');
+    if (!item) return;
+    startLp(item, e.clientX, e.clientY);
+  });
+  el.addEventListener('mousemove', e => {
+    if (!lpTimer) return;
+    if (Math.abs(e.clientX - lpStartX) > 4 || Math.abs(e.clientY - lpStartY) > 4) cancelLp();
+  });
+  el.addEventListener('mouseup', cancelLp);
+  el.addEventListener('mouseleave', cancelLp);
+
+  // Touch long-press
   el.addEventListener('touchstart', e => {
     const item = e.target.closest('.stream-item');
     if (!item) return;
     const t = e.touches[0];
-    const cx = t.clientX, cy = t.clientY;
-    lpTimer = setTimeout(() => {
-      lpTimer = null;
-      lpFired = true;
-      const s = store[+item.dataset.i];
-      if (s) showCtx({ clientX: cx, clientY: cy, preventDefault: () => {} }, s.url, s.name);
-    }, 500);
+    startLp(item, t.clientX, t.clientY);
   }, { passive: true });
-
-  const cancelLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
   el.addEventListener('touchend', cancelLp);
   el.addEventListener('touchmove', cancelLp);
   el.addEventListener('touchcancel', cancelLp);
