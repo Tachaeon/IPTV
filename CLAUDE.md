@@ -6,37 +6,36 @@ Guidance for Claude Code when working in this repository.
 
 A single-file IPTV web player hosted on GitHub Pages: <https://tachaeon.github.io/IPTV/>.
 
-The only production-relevant files are:
+Production-relevant files (repo root):
 
 - `index.html` — the entire web app (HTML + CSS + vanilla JS in one file)
 - `favicon.svg`
-- `All_Stations_FIXED.m3u8` — default playlist that auto-loads on page open
-- `All_Stations.m3u` — older raw playlist (kept for reference)
-- `serve.ps1` — optional local dev server with a `/proxy` route for CORS bypass
-
-The PowerShell scripts `IP-TV.ps1`, `Local-FileIPTV.ps1`, `Test-Stream.ps1` are legacy mpv-based desktop apps. They're not part of the web flow — see [Legacy PowerShell apps](#legacy-powershell-apps) at the end.
+- `README.md` / `CLAUDE.md` / `LICENSE`
+- `All_Stations_FIXED.m3u8` — dormant. The web app no longer references it; safe to delete.
+- `Archived/` — legacy PowerShell mpv apps and the older local dev server; not part of the web flow
 
 ## Running locally
 
-Just open `index.html` in a browser — everything except the iptv-org Browse tab works over `file://` because `raw.githubusercontent.com` serves CORS headers.
+Open `index.html` in a browser. The app fetches its default playlist from `iptv-org` over HTTPS, which sends CORS headers, so this works directly from `file://`.
 
-If you need the CORS proxy (e.g. for testing a stream URL whose host blocks browser fetches):
-
-```powershell
-pwsh .\serve.ps1
-# or
-powershell .\serve.ps1
-```
-
-Serves on `http://localhost:8090`, auto-opens the browser. `/proxy?url=...` fetches server-side and adds `Access-Control-Allow-Origin: *`. The HLS.js proxy loader inside `index.html` routes all HLS fetches through this when running on `localhost`.
+If you need to test a stream URL whose host blocks browser fetches, copy `Archived/serve.ps1` to the repo root and run it. It serves on `http://localhost:8090` with a `/proxy?url=...` route that fetches server-side and adds `Access-Control-Allow-Origin: *`. The HLS.js loader inside `index.html` auto-routes through `/proxy` when running on `localhost`.
 
 ## Web app architecture (`index.html`)
 
 No framework, no build step. Single `<script>` block. HLS.js loaded from CDN.
 
+### Source loading
+
+Two parallel arrays drive the default load:
+
+- `STREAM_SOURCES` — raw iptv-org country playlists (`us`, `uk`, `ca`, `au`). Channels come **only** from these.
+- `LOGO_SOURCES` — iptv-org region aggregates (`eur`, `amer`, `oce`). Used **only** as metadata. Their entries are parsed into a `metaMap` keyed by URL; any `tvg-logo`, `group-title`, and `tvg-language` they carry is overlaid onto matching stream entries.
+
+`loadFromSources()` fetches all seven feeds via `Promise.allSettled` (one failure doesn't abort the rest), merges into a `streamMap` keyed by URL (dedupes across the country files), applies the metadata overlay, then alphabetizes. No filtering happens here — the filter chip UI handles that at render time.
+
 ### State & storage
 
-All `let`s at the top of the script (`allStreams`, `favorites`, `recents`, `failed`, etc.). All localStorage keys are prefixed `stream-launcher-`:
+State `let`s at the top of the script (`allStreams`, `favorites`, `recents`, `failed`, etc.). All localStorage keys are prefixed `stream-launcher-`:
 
 | Key | Purpose |
 |---|---|
@@ -47,28 +46,37 @@ All `let`s at the top of the script (`allStreams`, `favorites`, `recents`, `fail
 | `stream-launcher-muted` | Saved mute state |
 | `stream-launcher-failed` | Set of URLs that failed to load |
 | `stream-launcher-sidebar-width` | Custom sidebar width |
+| `stream-launcher-filters` | Filter chip state (pluto/shop/rel/noneng) |
 | `theme` | Active theme name |
 | `sidebar-collapsed` | Sidebar collapsed flag |
 
-The **Reset** button in the header wipes all of the above and reloads.
+The **Reset** button in the header wipes all of these and reloads.
 
 ### Central functions
 
-- `parseM3U(text)` — walks EXTINF/URL pairs, extracts `name`, `url`, `logo`, `group` (from `tvg-logo` / `group-title` attributes)
-- `loadFromUrl(url, label, {switchTab})` — central playlist loader. Used by: file input, URL input prompt, default-playlist auto-load, Browse-tab clicks. Returns a promise.
-- `renderList(items, containerId, store)` — used uniformly by Streams, Favorites, and Recent tabs. Adds the `playing` class to the currently-playing row and the `failed` class + red dot for previously-failed streams.
+- `parseM3U(text)` — walks EXTINF/URL pairs, extracts `name`, `url`, `logo`, `group`, `language` (from `tvg-logo` / `group-title` / `tvg-language` attributes).
+- `loadFromSources({switchTab})` — multi-source loader used by the page-load default load and the Browse tab's `__DEFAULT__` row. Returns a promise.
+- `loadFromUrl(url, label, {switchTab})` — single-URL loader used by file input, URL prompt, and per-country Browse rows.
+- `renderList(items, containerId, store)` — uniform renderer for Streams, Favorites, Recent. Adds `playing` class to the current row and `failed` class + red dot for previously-failed streams.
 - `play(url, name)` — saves last-played, adds to Recents, cancels auto-skip, sets up HLS.js or native playback, updates `<title>`.
-- `showError(msg)` — central error handler: shows the overlay, marks the URL as failed, schedules auto-skip 3s later.
-- `wireList(containerId, store)` — attaches click, contextmenu, mouse long-press, and touch long-press handlers to a list container.
+- `showError(msg)` — central error handler: shows the overlay, marks the URL as failed, schedules auto-skip in 3s.
+- `wireList(containerId, store)` — attaches click, contextmenu, mouse long-press, and touch long-press handlers.
 - `cycleChannel(dir)` — used by arrow keys + auto-skip. Cycles through whichever tab is currently active (Streams / Favs / Recent).
+- `toggleFilter(key)` — flips one of the four filter chips and re-renders. `FILTER_PREDICATES` defines the four detectors (`pluto`, `shop`, `rel`, `noneng`).
+
+### Filter chips
+
+Four chip-style toggle buttons sit under the group dropdown: `Pluto`, `Shopping`, `Religious`, `Non-Eng`. Each, when active (`.chip.active`, accent-filled), removes streams matching its predicate from the rendered list. Predicates check both `group-title` and channel name; the `noneng` predicate only fires when `tvg-language` is present and not English, so untagged streams are kept.
+
+`filterStreams()` applies them after the text search and group dropdown. Chips work on every load path — combined sources, file, URL, Browse — not just the default load.
 
 ### Themes
 
 CSS variables in `:root` define the default (Tokyo Night). Alternate themes are `[data-theme="light"]` and `[data-theme="gruvbox"]` blocks. An early-paint script in `<head>` reads `localStorage.theme` and sets the `data-theme` attribute *before* the body renders to avoid a flash of wrong theme.
 
-A `--on-accent` variable is used wherever text sits on top of the accent color (e.g. `.btn-primary`) so it stays readable across themes.
+A `--on-accent` variable is used wherever text sits on top of the accent color (e.g. `.btn-primary`, active chips) so it stays readable across themes.
 
-### Keyboard shortcuts (all gated on focus not being in an input)
+### Keyboard shortcuts (gated on focus not being in an input)
 
 | Key | Action |
 |---|---|
@@ -80,37 +88,23 @@ A `--on-accent` variable is used wherever text sits on top of the accent color (
 
 ### Long-press
 
-`wireList()` supports long-press (500ms hold, < 4px movement) for both mouse and touch — opens the same context menu as right-click. The follow-up click after a long-press calls `e.stopPropagation()` to keep the document-level `hideCtx` from immediately closing the just-opened menu.
+`wireList()` supports long-press (500ms hold, < 4px movement) for both mouse and touch — opens the same context menu as right-click. The follow-up `click` after a long-press calls `e.stopPropagation()` to keep the document-level `hideCtx` handler from immediately closing the just-opened menu.
 
 ### Browse tab
 
-`PLAYLIST_FILES` (a hardcoded list of country/provider .m3u filenames) is mapped to `browseItems` with friendly labels via `PROVIDER_MAP` + `Intl.DisplayNames`. The first entry is a special `{ filename: '__DEFAULT__' }` row that re-loads `DEFAULT_M3U_URL` — gives users a way back to the original playlist after picking a country.
+`PLAYLIST_FILES` (a hardcoded list of country/provider `.m3u` filenames) is mapped to `browseItems` with friendly labels via `PROVIDER_MAP` + `Intl.DisplayNames`. The first entry is a special `{ filename: '__DEFAULT__' }` row that re-runs `loadFromSources()` — gives users a way back to the combined-sources playlist after picking a country.
 
 ### Version label
 
-A `<span class="version">v0.2.0</span>` in the footer. Bump manually on meaningful releases. Hover shows `document.lastModified` (the actual file's HTTP `Last-Modified` timestamp) — handy for confirming the browser served the new build vs. cached HTML.
+A `<span class="version">` in the footer. Bump manually on meaningful releases. Hover shows `document.lastModified` (the HTTP `Last-Modified` timestamp) — handy for confirming the browser served the new build vs. cached HTML.
 
-## Editing `All_Stations_FIXED.m3u8`
+## Archived
 
-Standard M3U format: `#EXTINF:...,Channel Name` then the URL on the next line. The file has had all Pluto streams stripped (search for "pluto" should return zero matches). Process EXTINF/URL pairs together when filtering — never operate on individual lines.
+`Archived/` contains earlier iterations not part of the live web app:
 
-## Legacy PowerShell apps
+- `IP-TV.ps1` — WPF browser app that fetched iptv-org playlists and launched streams in [mpv](https://mpv.io/). Single-file: UI is an inline XAML string loaded via `[Windows.Markup.XamlReader]::Load()`. `$script:` scope is required for variables shared across event handler ScriptBlocks. Live filtering uses `$view.Filter = { ... } + $view.Refresh()` on `CollectionViewSource`. Favorites are `ObservableCollection[object]` so the list updates without rebinding. Playlist selection is debounced 300ms.
+- `Local-FileIPTV.ps1` — WinForms launcher for local M3U files. mpv path hardcoded to `C:\Install\MPV\mpv.exe`. Favorites at `%APPDATA%\M3UStreamLauncher\favorites.json`.
+- `Test-Stream.ps1` — same as Local-FileIPTV but expects `mpv` on PATH.
+- `serve.ps1` — local dev server with `/proxy` route. Copy back to root to use.
 
-These are independent mpv-launching desktop apps. Not connected to the web app or to `serve.ps1`.
-
-```powershell
-# WPF browser app — requires PowerShell 5.1, STA handled automatically
-powershell.exe -File .\IP-TV.ps1
-
-# Local M3U launcher (mpv hardcoded to C:\Install\MPV\mpv.exe)
-powershell.exe -File .\Local-FileIPTV.ps1
-
-# Local M3U launcher (mpv must be on PATH)
-powershell.exe -File .\Test-Stream.ps1
-```
-
-`mpv.exe` must be at `$mpvPath` (top of each script). Favorites persist to `%APPDATA%\IPTV-WPF\favorites.json` (IP-TV.ps1) or `%APPDATA%\M3UStreamLauncher\favorites.json` (Local-FileIPTV.ps1).
-
-`IP-TV.ps1` is a single-file WPF app — UI is an inline XAML string loaded via `[Windows.Markup.XamlReader]::Load()`. `$script:` scope is required for variables shared across event handler ScriptBlocks. Live filtering uses `$view.Filter = { ... } + $view.Refresh()` on a `CollectionViewSource`. Favorites are `ObservableCollection[object]` so the list updates without rebinding. Playlist selection is debounced 300ms to avoid loading on every arrow-key press.
-
-To add a new provider, edit `$ProviderMap` at the top of `IP-TV.ps1` (the key must match the suffix in the M3U filename, e.g. `us_newprovider.m3u` → key `'newprovider'`). Add country filenames to the `$files` here-string list.
+The three PowerShell apps all require `mpv.exe`. Favorites for `IP-TV.ps1` persist to `%APPDATA%\IPTV-WPF\favorites.json`. To add a new provider in `IP-TV.ps1`, edit `$ProviderMap` at the top (key must match the suffix in the M3U filename, e.g. `us_newprovider.m3u` → key `'newprovider'`); add country filenames to the `$files` here-string list.
