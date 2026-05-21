@@ -498,7 +498,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.1</span>
+  <span class="version" id="version">v0.5.2</span>
 </footer>
 
 <div id="ctx">
@@ -528,9 +528,24 @@ function maybeProxy(url) {
 let ProxyLoader = null;
 if (typeof Hls !== 'undefined') {
   ProxyLoader = class extends Hls.DefaultConfig.loader {
-    load(ctx, cfg, cb) {
-      ctx.url = maybeProxy(ctx.url);
-      super.load(ctx, cfg, cb);
+    load(ctx, cfg, callbacks) {
+      const originalUrl = ctx.url;
+      const proxied = maybeProxy(originalUrl);
+      if (proxied === originalUrl) {
+        super.load(ctx, cfg, callbacks);
+        return;
+      }
+      ctx.url = proxied;
+      // Wrap onSuccess so HLS.js sees the *original* URL as the response URL —
+      // otherwise it'd use the proxy URL as the base for resolving relative
+      // segment URLs in the manifest, which produces broken paths.
+      const wrapped = Object.assign({}, callbacks, {
+        onSuccess: (response, stats, context, xhr) => {
+          if (response) response.url = originalUrl;
+          callbacks.onSuccess(response, stats, context, xhr);
+        }
+      });
+      super.load(ctx, cfg, wrapped);
     }
   };
 }
