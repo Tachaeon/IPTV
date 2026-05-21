@@ -467,7 +467,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.3.1</span>
+  <span class="version" id="version">v0.4.0</span>
 </footer>
 
 <div id="ctx">
@@ -511,20 +511,19 @@ const REC_MAX    = 10;
 const SIDE_MIN   = 180;
 const SIDE_MAX   = 600;
 
-// Combined sources. Listed bottom wins on URL-dedupe collisions.
-const SOURCES = [
-  // Raw per-country playlists from iptv-org repo
+// Stream sources — the actual playlists we load channels from
+const STREAM_SOURCES = [
   'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/us.m3u',
   'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/uk.m3u',
   'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/ca.m3u',
-  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/au.m3u',
-  // Aggregated country/region views (these win duplicates against the raw streams above)
-  'https://iptv-org.github.io/iptv/countries/us.m3u',
-  'https://iptv-org.github.io/iptv/countries/uk.m3u',
-  'https://iptv-org.github.io/iptv/countries/ca.m3u',
-  'https://iptv-org.github.io/iptv/regions/oce.m3u',
-  // Listed last so its richer metadata (station logos) wins all collisions
-  'https://iptv-org.github.io/iptv/regions/amer.m3u'
+  'https://raw.githubusercontent.com/iptv-org/iptv/refs/heads/master/streams/au.m3u'
+];
+
+// Logo-only sources — fetched alongside, matched by URL to enrich stream logos
+const LOGO_SOURCES = [
+  'https://iptv-org.github.io/iptv/regions/eur.m3u',
+  'https://iptv-org.github.io/iptv/regions/amer.m3u',
+  'https://iptv-org.github.io/iptv/regions/oce.m3u'
 ];
 
 // ── Favorites ─────────────────────────────────────────────
@@ -1040,36 +1039,48 @@ function loadFromUrl(url, label, opts = {}) {
 
 function fetchPlaylist(filename, label) {
   if (filename === '__DEFAULT__') {
-    loadFromSources(SOURCES, { switchTab: true });
+    loadFromSources({ switchTab: true });
   } else {
     loadFromUrl(BASE_URL + filename, label, { switchTab: true });
   }
 }
 
-async function loadFromSources(urls, opts = {}) {
-  setStatus('Fetching ' + urls.length + ' sources…');
+async function loadFromSources(opts = {}) {
+  const all = [...STREAM_SOURCES, ...LOGO_SOURCES];
+  setStatus(`Fetching ${STREAM_SOURCES.length} stream feeds + ${LOGO_SOURCES.length} logo feeds…`);
   const results = await Promise.allSettled(
-    urls.map(u => fetch(u).then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))))
+    all.map(u => fetch(u).then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))))
   );
 
-  const map = new Map();
-  let ok = 0, fail = 0;
+  const streamMap = new Map();
+  const logoMap = new Map();
+  let okStreams = 0, okLogos = 0, fail = 0;
+
   results.forEach((r, i) => {
-    if (r.status === 'fulfilled') {
-      ok++;
-      parseM3U(r.value).forEach(s => map.set(s.url, s));
-    } else {
+    if (r.status !== 'fulfilled') {
       fail++;
-      console.warn('Source failed:', urls[i], r.reason);
+      console.warn('Source failed:', all[i], r.reason);
+      return;
     }
+    const isStreamSrc = i < STREAM_SOURCES.length;
+    if (isStreamSrc) okStreams++; else okLogos++;
+    parseM3U(r.value).forEach(s => {
+      if (isStreamSrc) streamMap.set(s.url, s);
+      else if (s.logo) logoMap.set(s.url, s.logo);
+    });
   });
 
-  allStreams = [...map.values()];
+  // Overlay logo-feed images onto matching stream URLs (regions metadata is curated)
+  streamMap.forEach(s => { if (logoMap.has(s.url)) s.logo = logoMap.get(s.url); });
+
+  allStreams = [...streamMap.values()]
+    .filter(s => !/pluto/i.test(s.url) && !/pluto/i.test(s.name || ''))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
   refreshGroupOptions();
   filterStreams();
   document.getElementById('badge').textContent = allStreams.length.toLocaleString() + ' streams';
-  const tail = fail ? ` (${fail} source${fail === 1 ? '' : 's'} failed)` : '';
-  setStatus(`Loaded ${allStreams.length.toLocaleString()} streams from ${ok} source${ok === 1 ? '' : 's'}${tail}`);
+  const tail = fail ? ` (${fail} feed${fail === 1 ? '' : 's'} failed)` : '';
+  setStatus(`Loaded ${allStreams.length.toLocaleString()} streams from ${okStreams} feeds + ${okLogos} logo feeds${tail}`);
   if (opts.switchTab) switchTab('streams');
 }
 
@@ -1173,7 +1184,7 @@ document.getElementById('theme-select').value = localStorage.getItem('theme') ||
 updateFsIcon();
 document.getElementById('version').title = 'Last modified: ' + document.lastModified;
 
-loadFromSources(SOURCES).then(() => {
+loadFromSources().then(() => {
   try {
     const last = JSON.parse(localStorage.getItem(LAST_KEY) || 'null');
     if (!last || !last.url) return;
