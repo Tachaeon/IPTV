@@ -498,7 +498,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.4.4</span>
+  <span class="version" id="version">v0.4.5</span>
 </footer>
 
 <div id="ctx">
@@ -578,14 +578,43 @@ function removeFav(url) {
 }
 
 // ── Failed marks ──────────────────────────────────────────
+const FAILED_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 function loadFailed() {
-  try { return new Set(JSON.parse(localStorage.getItem(FAILED_KEY) || '[]')); } catch { return new Set(); }
+  try {
+    const raw = JSON.parse(localStorage.getItem(FAILED_KEY) || '[]');
+    const map = new Map();
+    const now = Date.now();
+    if (raw.length && typeof raw[0] === 'string') {
+      // Legacy: array of URLs. Upgrade by stamping them with "now".
+      raw.forEach(url => map.set(url, now));
+    } else {
+      raw.forEach(([url, ts]) => {
+        if (typeof url === 'string' && typeof ts === 'number' && now - ts < FAILED_TTL_MS) {
+          map.set(url, ts);
+        }
+      });
+    }
+    return map;
+  } catch { return new Map(); }
 }
-function saveFailed() { localStorage.setItem(FAILED_KEY, JSON.stringify([...failed])); }
+function saveFailed() {
+  localStorage.setItem(FAILED_KEY, JSON.stringify([...failed.entries()]));
+}
+
+function isFailed(url) {
+  const ts = failed.get(url);
+  if (!ts) return false;
+  if (Date.now() - ts >= FAILED_TTL_MS) {
+    failed.delete(url);
+    return false;
+  }
+  return true;
+}
 
 function markFailed(url) {
-  if (!url || failed.has(url)) return;
-  failed.add(url);
+  if (!url) return;
+  failed.set(url, Date.now());
   saveFailed();
   filterStreams(); filterFavs(); refreshRecents();
 }
@@ -691,9 +720,9 @@ function renderList(items, containerId, store) {
     const logo = s.logo && s.logo.startsWith('http')
       ? `<img class="stream-logo" src="${esc(s.logo)}" loading="lazy" onerror="this.style.visibility='hidden'" alt="">`
       : '';
-    const isFailed = failed.has(s.url);
-    const dot = isFailed ? '<span class="failed-dot" title="Previously failed"></span>' : '';
-    const cls = 'stream-item' + (s.url === playingUrl ? ' playing' : '') + (isFailed ? ' failed' : '');
+    const isFail = isFailed(s.url);
+    const dot = isFail ? '<span class="failed-dot" title="Failed within the last 24 h"></span>' : '';
+    const cls = 'stream-item' + (s.url === playingUrl ? ' playing' : '') + (isFail ? ' failed' : '');
     return `<div class="${cls}" data-i="${i}">${logo}<span class="stream-label">${esc(s.name)}</span>${dot}</div>`;
   }).join('');
 }
