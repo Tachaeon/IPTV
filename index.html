@@ -467,7 +467,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.2.0</span>
+  <span class="version" id="version">v0.2.1</span>
 </footer>
 
 <div id="ctx">
@@ -647,7 +647,7 @@ function renderList(items, containerId, store) {
     const isFailed = failed.has(s.url);
     const dot = isFailed ? '<span class="failed-dot" title="Previously failed"></span>' : '';
     const cls = 'stream-item' + (s.url === playingUrl ? ' playing' : '') + (isFailed ? ' failed' : '');
-    return `<div class="${cls}" data-i="${i}" title="${esc(s.name)}">${logo}<span class="stream-label">${esc(s.name)}</span>${dot}</div>`;
+    return `<div class="${cls}" data-i="${i}">${logo}<span class="stream-label">${esc(s.name)}</span>${dot}</div>`;
   }).join('');
 }
 
