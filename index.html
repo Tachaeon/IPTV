@@ -476,6 +476,7 @@
           <button type="button" class="chip" data-filter="shop"   onclick="toggleFilter('shop')">Shopping</button>
           <button type="button" class="chip" data-filter="rel"    onclick="toggleFilter('rel')">Religious</button>
           <button type="button" class="chip" data-filter="noneng" onclick="toggleFilter('noneng')">Non-Eng</button>
+          <button type="button" class="chip" data-filter="geo"    onclick="toggleFilter('geo')">Geo-blocked</button>
         </div>
       </div>
       <div class="list-and-strip">
@@ -530,7 +531,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.5</span>
+  <span class="version" id="version">v0.5.6</span>
 </footer>
 
 <div id="ctx">
@@ -828,12 +829,13 @@ const FILTER_PREDICATES = {
             || /\b(qvc|hsn|shop ?hq|jewelry ?tv|home ?shopping|teleshop|evine)\b/i.test(s.name || ''),
   rel:    s => /religious|religion|spiritual/i.test(s.group || '')
             || /\b(tbn|cbn|ewtn|3abn|daystar|god ?tv|trinity broadcasting|hillsong|hope channel|christian|catholic|gospel|worship|faith ?tv|jctv|bishop|inspiration network|salvation army)\b/i.test(s.name || ''),
-  noneng: s => s.language && !/\b(eng|en|english)\b/i.test(s.language)
+  noneng: s => s.language && !/\b(eng|en|english)\b/i.test(s.language),
+  geo:    s => /geo[\s-]?block/i.test(s.name || '')
 };
 const FILTERS_KEY = 'stream-launcher-filters';
 
 function loadFilterState() {
-  const defaults = { pluto: true, shop: true, rel: true, noneng: true };
+  const defaults = { pluto: true, shop: true, rel: true, noneng: true, geo: true };
   try {
     const saved = JSON.parse(localStorage.getItem(FILTERS_KEY) || 'null');
     return saved ? { ...defaults, ...saved } : defaults;
