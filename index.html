@@ -556,7 +556,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.10</span>
+  <span class="version" id="version">v0.5.11</span>
 </footer>
 
 <div id="ctx">
@@ -595,29 +595,34 @@ function maybeProxy(url) {
   return url;
 }
 
-let ProxyLoader = null;
+var ProxyLoader = null;
 if (typeof Hls !== 'undefined') {
-  ProxyLoader = class extends Hls.DefaultConfig.loader {
-    load(ctx, cfg, callbacks) {
-      const originalUrl = ctx.url;
-      const proxied = maybeProxy(originalUrl);
-      if (proxied === originalUrl) {
-        super.load(ctx, cfg, callbacks);
-        return;
-      }
-      ctx.url = proxied;
-      // Wrap onSuccess so HLS.js sees the *original* URL as the response URL —
-      // otherwise it'd use the proxy URL as the base for resolving relative
-      // segment URLs in the manifest, which produces broken paths.
-      const wrapped = Object.assign({}, callbacks, {
-        onSuccess: (response, stats, context, xhr) => {
-          if (response) response.url = originalUrl;
-          callbacks.onSuccess(response, stats, context, xhr);
-        }
-      });
-      super.load(ctx, cfg, wrapped);
+  var BaseLoader = Hls.DefaultConfig.loader;
+  function ProxyLoaderImpl() {
+    BaseLoader.call(this);
+  }
+  ProxyLoaderImpl.prototype = Object.create(BaseLoader.prototype);
+  ProxyLoaderImpl.prototype.constructor = ProxyLoaderImpl;
+  ProxyLoaderImpl.prototype.load = function (ctx, cfg, callbacks) {
+    var originalUrl = ctx.url;
+    var proxied = maybeProxy(originalUrl);
+    if (proxied === originalUrl) {
+      BaseLoader.prototype.load.call(this, ctx, cfg, callbacks);
+      return;
     }
+    ctx.url = proxied;
+    // Wrap onSuccess so HLS.js sees the *original* URL as the response URL —
+    // otherwise it'd use the proxy URL as the base for resolving relative
+    // segment URLs in the manifest, which produces broken paths.
+    var wrapped = Object.assign({}, callbacks, {
+      onSuccess: function (response, stats, context, xhr) {
+        if (response) response.url = originalUrl;
+        callbacks.onSuccess(response, stats, context, xhr);
+      }
+    });
+    BaseLoader.prototype.load.call(this, ctx, cfg, wrapped);
   };
+  ProxyLoader = ProxyLoaderImpl;
 }
 
 // ── State ─────────────────────────────────────────────────
@@ -1318,7 +1323,8 @@ function filterBrowse() {
   renderBrowse(q ? browseItems.filter(b => b.label.toLowerCase().includes(q)) : browseItems);
 }
 
-function loadFromUrl(url, label, opts = {}) {
+function loadFromUrl(url, label, opts) {
+  opts = opts || {};
   setStatus('Fetching ' + label + '…');
   return fetch(url)
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
@@ -1534,6 +1540,13 @@ loadFromSources().then(() => {
   console.error('Initial load failed:', err);
   setStatus('Initial load failed: ' + (err && err.message ? err.message : err));
 });
+
+// Boot completion marker — if user sees "[boot OK]" in the badge, the script
+// parsed and ran to EOF. Helps diagnose TV-browser parse-time failures.
+try {
+  var __badge = document.getElementById('badge');
+  if (__badge && __badge.textContent === 'No playlist loaded') __badge.textContent = '[boot OK] loading…';
+} catch (e) {}
 </script>
 </body>
 </html>
