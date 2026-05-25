@@ -65,8 +65,17 @@
     }
     body.is-tv .stream-list::-webkit-scrollbar { width: 0; }
     body.is-tv .tv-hidden { display: none !important; }
+    body.is-tv .az-jump { display: none; }
     .tv-only { display: none; }
     body.is-tv .tv-only { display: inline; }
+    /* Virtual scrolling row sizing — TV only, where logos are skipped */
+    body.is-tv .stream-item {
+      height: 28px;
+      padding: 5px 10px;
+      box-sizing: border-box;
+    }
+    body.is-tv .vs-phantom { position: relative; }
+    body.is-tv .vs-window  { position: absolute; left: 0; right: 0; top: 0; }
 
     :root {
       --bg:        #1a1b26;
@@ -585,7 +594,7 @@
   <span id="status">Open an M3U file to begin</span>
   <span class="tv-hidden" style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click or long-press: favorite</span>
   <span class="tv-only" style="margin-left:auto">Select: play &nbsp;·&nbsp; ↑/↓: cycle channels &nbsp;·&nbsp; Favorite: long press</span>
-  <span class="version" id="version">v0.5.17</span>
+  <span class="version" id="version">v0.6.0</span>
 </footer>
 
 <div id="ctx">
@@ -919,6 +928,19 @@ function esc(s) {
 }
 
 // ── Render list ───────────────────────────────────────────
+const TV_ROW_HEIGHT = 28;
+const TV_BUFFER_ROWS = 8;
+
+function renderRow(s, absIdx) {
+  const logo = (!IS_TV && s.logo && s.logo.startsWith('http'))
+    ? '<img class="stream-logo" src="' + esc(s.logo) + '" loading="lazy" onerror="this.style.visibility=\'hidden\'" alt="">'
+    : '';
+  const isFail = isFailed(s.url);
+  const dot = isFail ? '<span class="failed-dot" title="Failed within the last 24 h"></span>' : '';
+  const cls = 'stream-item' + (s.url === playingUrl ? ' playing' : '') + (isFail ? ' failed' : '');
+  return '<div class="' + cls + '" data-i="' + absIdx + '">' + logo + '<span class="stream-label">' + esc(s.name) + '</span>' + dot + '</div>';
+}
+
 function renderList(items, containerId, store) {
   store.length = 0;
   items.forEach(i => store.push(i));
@@ -926,17 +948,71 @@ function renderList(items, containerId, store) {
   const el = document.getElementById(containerId);
   if (!items.length) {
     el.innerHTML = '<div class="list-empty">No items</div>';
+    el.onscroll = null;
     return;
   }
-  el.innerHTML = items.map((s, i) => {
-    const logo = (!IS_TV && s.logo && s.logo.startsWith('http'))
-      ? `<img class="stream-logo" src="${esc(s.logo)}" loading="lazy" onerror="this.style.visibility='hidden'" alt="">`
-      : '';
-    const isFail = isFailed(s.url);
-    const dot = isFail ? '<span class="failed-dot" title="Failed within the last 24 h"></span>' : '';
-    const cls = 'stream-item' + (s.url === playingUrl ? ' playing' : '') + (isFail ? ' failed' : '');
-    return `<div class="${cls}" data-i="${i}">${logo}<span class="stream-label">${esc(s.name)}</span>${dot}</div>`;
-  }).join('');
+
+  // TV streams list uses virtual scrolling — only render visible rows
+  if (IS_TV && containerId === 'lst-streams') {
+    renderVirtual(el, items);
+    return;
+  }
+
+  let html = '';
+  for (let i = 0; i < items.length; i++) html += renderRow(items[i], i);
+  el.innerHTML = html;
+  el.onscroll = null;
+}
+
+function renderVirtual(el, items) {
+  el.innerHTML = '<div class="vs-phantom" style="height:' + (items.length * TV_ROW_HEIGHT) + 'px"><div class="vs-window"></div></div>';
+  const wnd = el.firstChild.firstChild;
+
+  function update() {
+    const scrollTop = el.scrollTop;
+    const clientH = el.clientHeight || 400;
+    const startVisible = Math.floor(scrollTop / TV_ROW_HEIGHT);
+    const start = Math.max(0, startVisible - TV_BUFFER_ROWS);
+    const visibleCount = Math.ceil(clientH / TV_ROW_HEIGHT);
+    const end = Math.min(items.length, start + visibleCount + TV_BUFFER_ROWS * 2);
+
+    let html = '';
+    for (let i = start; i < end; i++) html += renderRow(items[i], i);
+    wnd.innerHTML = html;
+    wnd.style.top = (start * TV_ROW_HEIGHT) + 'px';
+  }
+
+  let rafScheduled = false;
+  el.onscroll = function () {
+    if (rafScheduled) return;
+    rafScheduled = true;
+    requestAnimationFrame(function () {
+      rafScheduled = false;
+      update();
+    });
+  };
+  update();
+}
+
+function scrollListToIndex(listId, idx, block) {
+  const el = document.getElementById(listId);
+  if (!el) return;
+  if (IS_TV && listId === 'lst-streams') {
+    const top = idx * TV_ROW_HEIGHT;
+    if (block === 'center') {
+      el.scrollTop = Math.max(0, top - (el.clientHeight - TV_ROW_HEIGHT) / 2);
+    } else if (block === 'nearest') {
+      if (top < el.scrollTop) el.scrollTop = top;
+      else if (top + TV_ROW_HEIGHT > el.scrollTop + el.clientHeight) {
+        el.scrollTop = top + TV_ROW_HEIGHT - el.clientHeight;
+      }
+    } else {
+      el.scrollTop = top;
+    }
+    return;
+  }
+  const items = el.querySelectorAll('.stream-item');
+  if (items[idx]) items[idx].scrollIntoView({ block: block || 'nearest' });
 }
 
 const FILTER_PREDICATES = {
@@ -996,6 +1072,7 @@ const AZ_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 let _azFirstIdx = {};
 
 function updateAzJump() {
+  if (IS_TV) return; // strip is hidden on TV — skip the work
   const strip = document.getElementById('az-jump-streams');
   if (!strip) return;
   _azFirstIdx = {};
@@ -1011,8 +1088,7 @@ function updateAzJump() {
 function jumpToLetter(letter) {
   const idx = _azFirstIdx[letter];
   if (idx === undefined) return;
-  const items = document.getElementById('lst-streams').querySelectorAll('.stream-item');
-  if (items[idx]) items[idx].scrollIntoView({ block: 'start' });
+  scrollListToIndex('lst-streams', idx, 'start');
 }
 
 function refreshGroupOptions() {
@@ -1044,6 +1120,7 @@ function switchTab(tab) {
     document.getElementById('tb-' + t).classList.toggle('active', t === tab);
     document.getElementById('pnl-' + t).classList.toggle('active', t === tab);
   });
+  if (tab === 'browse') ensureBrowseBuilt();
 }
 
 // ── Playback ──────────────────────────────────────────────
@@ -1232,9 +1309,7 @@ function cycleChannel(dir) {
   const next = list[idx];
   if (!next) return;
   play(next.url, next.name);
-
-  const items = document.getElementById(listId).querySelectorAll('.stream-item');
-  if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
+  scrollListToIndex(listId, idx, 'nearest');
 }
 
 // ── Sidebar toggle ────────────────────────────────────────
@@ -1340,9 +1415,16 @@ const PLAYLIST_FILES = [
 var _rn = null;
 try { _rn = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) {}
 
-const browseItems = [
-  { filename: '__DEFAULT__', label: '★ Combined Sources (Default)' },
-  ...PLAYLIST_FILES.map(f => {
+// Lazy-built. Construction deferred until first Browse-tab open to save
+// ~30KB initial memory and a couple ms of startup CPU.
+let browseItems = null;
+let shownBrowse = [];
+
+function ensureBrowseBuilt() {
+  if (browseItems) return;
+  browseItems = [{ filename: '__DEFAULT__', label: '★ Combined Sources (Default)' }];
+  for (let i = 0; i < PLAYLIST_FILES.length; i++) {
+    const f = PLAYLIST_FILES[i];
     const parts = f.replace('.m3u', '').split('_');
     const cc = parts[0] === 'uk' ? 'GB' : parts[0].toUpperCase();
     let country = cc;
@@ -1352,10 +1434,11 @@ const browseItems = [
     const label = parts.length > 1
       ? country + ' — ' + (PROVIDER_MAP[parts.slice(1).join('_')] || parts.slice(1).join(' '))
       : country;
-    return { filename: f, label };
-  })
-];
-let shownBrowse = [...browseItems];
+    browseItems.push({ filename: f, label: label });
+  }
+  shownBrowse = browseItems.slice();
+  renderBrowse(browseItems);
+}
 
 function renderBrowse(items) {
   shownBrowse = items;
@@ -1367,6 +1450,7 @@ function renderBrowse(items) {
 }
 
 function filterBrowse() {
+  if (!browseItems) return;
   const q = document.getElementById('q-browse').value.toLowerCase();
   renderBrowse(q ? browseItems.filter(b => b.label.toLowerCase().includes(q)) : browseItems);
 }
@@ -1566,7 +1650,6 @@ document.getElementById('lst-browse').addEventListener('click', e => {
   const b = shownBrowse[+item.dataset.i];
   if (b) fetchPlaylist(b.filename, b.label);
 });
-renderBrowse(browseItems);
 
 if (localStorage.getItem('sidebar-collapsed') === '1') {
   document.querySelector('.sidebar').classList.add('collapsed');
@@ -1585,10 +1668,7 @@ loadFromSources().then(() => {
     if (!found) return;
     play(found.url, found.name);
     const idx = shownStreams.findIndex(s => s.url === found.url);
-    if (idx !== -1) {
-      const items = document.getElementById('lst-streams').querySelectorAll('.stream-item');
-      if (items[idx]) items[idx].scrollIntoView({ block: 'center' });
-    }
+    if (idx !== -1) scrollListToIndex('lst-streams', idx, 'center');
   } catch (e) {}
 }).catch(err => {
   console.error('Initial load failed:', err);
