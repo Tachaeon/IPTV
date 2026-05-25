@@ -14,12 +14,29 @@
     // devices without dev tools, e.g. LG WebOS TVs).
     window.addEventListener('error', function (ev) {
       var el = document.getElementById('status');
-      if (el) el.textContent = 'JS error: ' + (ev.message || 'unknown') +
-        (ev.filename ? ' @' + ev.filename.split('/').pop() : '') +
-        (ev.lineno ? ':' + ev.lineno : '');
+      if (!el) return;
+      var msg = ev.message || 'unknown';
+      var loc = '';
+      if (ev.filename) {
+        loc = ' @' + ev.filename.replace(/^.*\//, '');
+        if (ev.lineno) loc += ':' + ev.lineno + (ev.colno ? ':' + ev.colno : '');
+      }
+      var detail = '';
+      if (ev.error) {
+        detail = ' | ' + (ev.error.name || 'Error') + ': ' + (ev.error.message || '');
+      }
+      el.textContent = 'JS error: ' + msg + loc + detail;
+    });
+    // Same for unhandled promise rejections.
+    window.addEventListener('unhandledrejection', function (ev) {
+      var el = document.getElementById('status');
+      if (!el) return;
+      var r = ev.reason;
+      var s = r && r.message ? r.message : (typeof r === 'string' ? r : 'unknown');
+      el.textContent = 'Promise rejected: ' + s;
     });
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js" crossorigin="anonymous"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -539,7 +556,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.9</span>
+  <span class="version" id="version">v0.5.10</span>
 </footer>
 
 <div id="ctx">
