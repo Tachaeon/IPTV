@@ -44,6 +44,30 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* TV-specific: kill all transitions/animations + hover effects to save GPU/CPU */
+    body.is-tv *, body.is-tv *::before, body.is-tv *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+    body.is-tv .stream-item:hover,
+    body.is-tv .tab-btn:hover,
+    body.is-tv .btn:hover,
+    body.is-tv .btn-icon:hover,
+    body.is-tv .chip:hover,
+    body.is-tv .filters summary:hover,
+    body.is-tv .filter-row label:hover,
+    body.is-tv .theme-select:hover,
+    body.is-tv .search-wrap select:hover,
+    body.is-tv .az-jump button:hover {
+      background: inherit;
+      color: inherit;
+      filter: none;
+    }
+    body.is-tv .stream-list::-webkit-scrollbar { width: 0; }
+    body.is-tv .tv-hidden { display: none !important; }
+    .tv-only { display: none; }
+    body.is-tv .tv-only { display: inline; }
+
     :root {
       --bg:        #1a1b26;
       --bg-alt:    #16161e;
@@ -470,8 +494,8 @@
     <option value="light">Light</option>
     <option value="gruvbox">Gruvbox</option>
   </select>
-  <button class="btn btn-default" onclick="promptLoadUrl()">Open URL</button>
-  <button class="btn btn-primary" onclick="document.getElementById('file-in').click()">Open M3U</button>
+  <button class="btn btn-default tv-hidden" onclick="promptLoadUrl()">Open URL</button>
+  <button class="btn btn-primary tv-hidden" onclick="document.getElementById('file-in').click()">Open M3U</button>
   <button class="btn btn-default" onclick="resetAllSettings()" title="Clear favorites, recents, theme, and all saved data">Reset</button>
 </header>
 
@@ -559,8 +583,9 @@
 <footer class="footer">
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
-  <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.14</span>
+  <span class="tv-hidden" style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click or long-press: favorite</span>
+  <span class="tv-only" style="margin-left:auto">Select: play &nbsp;·&nbsp; ↑/↓: cycle channels &nbsp;·&nbsp; Favorite: long press</span>
+  <span class="version" id="version">v0.5.17</span>
 </footer>
 
 <div id="ctx">
@@ -569,10 +594,11 @@
 
 <script>
 // ── TV detection ──────────────────────────────────────────
-// Smart TVs (LG WebOS, Samsung Tizen, etc.) struggle with thousands of
-// <img> elements at once. Detected via User-Agent so we can skip rendering
-// logos on TV and avoid memory crashes.
+// Smart TVs (LG WebOS, Samsung Tizen, etc.) have limited RAM/GPU. Detect
+// via User-Agent so we can skip logos, transitions, and hover effects to
+// avoid memory crashes and rendering jank.
 var IS_TV = /web[0o]s|smart-?tv|tizen|hbbtv|netcast|viera|hisense/i.test(navigator.userAgent || '');
+if (IS_TV) try { document.body.classList.add('is-tv'); } catch (e) {}
 
 // ── Polyfills for older browsers (e.g. LG WebOS pre-2021) ─
 if (!Promise.allSettled) {
@@ -843,15 +869,21 @@ function parseM3U(text) {
     if (!line) continue;
     if (line.startsWith('#EXTINF:')) {
       const m  = line.match(/#EXTINF:[^,]*,\s*(.*)\s*$/);
-      const lm = line.match(/tvg-logo="([^"]*)"/);
       const gm = line.match(/group-title="([^"]*)"/);
       const langM = line.match(/tvg-language="([^"]*)"/);
       name  = m     ? m[1].trim()      : null;
-      logo  = lm    ? lm[1] || null    : null;
       group = gm    ? gm[1] || null    : null;
       lang  = langM ? langM[1] || null : null;
+      // Skip logo regex on TV — we don't render logos so the string is dead weight
+      if (!IS_TV) {
+        const lm = line.match(/tvg-logo="([^"]*)"/);
+        logo = lm ? lm[1] || null : null;
+      }
     } else if (!line.startsWith('#')) {
-      out.push({ name: name || line, url: line, logo, group, language: lang });
+      // On TV we omit the logo field entirely to save per-entry memory
+      out.push(IS_TV
+        ? { name: name || line, url: line, group, language: lang }
+        : { name: name || line, url: line, logo, group, language: lang });
       name = null;
       logo = null;
       group = null;
@@ -1365,8 +1397,11 @@ function fetchPlaylist(filename, label) {
 
 function loadFromSources(opts) {
   opts = opts || {};
-  const all = STREAM_SOURCES.concat(LOGO_SOURCES);
-  setStatus('Fetching ' + STREAM_SOURCES.length + ' stream feeds + ' + LOGO_SOURCES.length + ' logo feeds…');
+  // On TV we don't render logos, so skip the logo metadata feeds entirely.
+  const all = IS_TV ? STREAM_SOURCES.slice() : STREAM_SOURCES.concat(LOGO_SOURCES);
+  setStatus(IS_TV
+    ? 'Fetching ' + STREAM_SOURCES.length + ' stream feeds…'
+    : 'Fetching ' + STREAM_SOURCES.length + ' stream feeds + ' + LOGO_SOURCES.length + ' logo feeds…');
   const fetches = all.map(function (u) {
     return fetch(u).then(function (r) {
       if (!r.ok) return Promise.reject(new Error('HTTP ' + r.status));
@@ -1392,29 +1427,30 @@ function loadFromSources(opts) {
       });
     });
 
-    // Overlay region metadata onto matching stream URLs
-    streamMap.forEach(function (s) {
-      const meta = metaMap.get(s.url);
-      if (!meta) return;
-      if (meta.logo)     s.logo     = meta.logo;
-      if (meta.group)    s.group    = meta.group;
-      if (meta.language) s.language = meta.language;
-    });
-
-    // Name-based logo fallback
-    const nameLogoMap = new Map();
-    const addNameLogo = function (s) {
-      if (!s.logo) return;
-      const key = normalizeChannelName(s.name);
-      if (key && !nameLogoMap.has(key)) nameLogoMap.set(key, s.logo);
-    };
-    streamMap.forEach(addNameLogo);
-    metaMap.forEach(addNameLogo);
-    streamMap.forEach(function (s) {
-      if (s.logo) return;
-      const key = normalizeChannelName(s.name);
-      if (key && nameLogoMap.has(key)) s.logo = nameLogoMap.get(key);
-    });
+    if (!IS_TV) {
+      // Overlay region metadata onto matching stream URLs (logos, groups, lang)
+      streamMap.forEach(function (s) {
+        const meta = metaMap.get(s.url);
+        if (!meta) return;
+        if (meta.logo)     s.logo     = meta.logo;
+        if (meta.group)    s.group    = meta.group;
+        if (meta.language) s.language = meta.language;
+      });
+      // Name-based logo fallback
+      const nameLogoMap = new Map();
+      const addNameLogo = function (s) {
+        if (!s.logo) return;
+        const key = normalizeChannelName(s.name);
+        if (key && !nameLogoMap.has(key)) nameLogoMap.set(key, s.logo);
+      };
+      streamMap.forEach(addNameLogo);
+      metaMap.forEach(addNameLogo);
+      streamMap.forEach(function (s) {
+        if (s.logo) return;
+        const key = normalizeChannelName(s.name);
+        if (key && nameLogoMap.has(key)) s.logo = nameLogoMap.get(key);
+      });
+    }
 
     allStreams = Array.from(streamMap.values()).sort(function (a, b) {
       return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
@@ -1423,7 +1459,9 @@ function loadFromSources(opts) {
     filterStreams();
     document.getElementById('badge').textContent = allStreams.length.toLocaleString() + ' streams';
     const tail = fail ? ' (' + fail + ' feed' + (fail === 1 ? '' : 's') + ' failed)' : '';
-    setStatus('Loaded ' + allStreams.length.toLocaleString() + ' streams from ' + okStreams + ' feeds + ' + okLogos + ' logo feeds' + tail);
+    setStatus(IS_TV
+      ? 'Loaded ' + allStreams.length.toLocaleString() + ' streams from ' + okStreams + ' feeds' + tail
+      : 'Loaded ' + allStreams.length.toLocaleString() + ' streams from ' + okStreams + ' feeds + ' + okLogos + ' logo feeds' + tail);
     if (opts.switchTab) switchTab('streams');
   });
 }
