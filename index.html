@@ -40,7 +40,7 @@
       el.textContent = 'Promise rejected: ' + s;
     });
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.light.min.js" crossorigin="anonymous"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -594,7 +594,7 @@
   <span id="status">Open an M3U file to begin</span>
   <span class="tv-hidden" style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click or long-press: favorite</span>
   <span class="tv-only" style="margin-left:auto">Select: play &nbsp;·&nbsp; ↑/↓: cycle channels &nbsp;·&nbsp; Favorite: long press</span>
-  <span class="version" id="version">v0.6.0</span>
+  <span class="version" id="version">v0.6.1</span>
 </footer>
 
 <div id="ctx">
@@ -607,7 +607,13 @@
 // via User-Agent so we can skip logos, transitions, and hover effects to
 // avoid memory crashes and rendering jank.
 var IS_TV = /web[0o]s|smart-?tv|tizen|hbbtv|netcast|viera|hisense/i.test(navigator.userAgent || '');
-if (IS_TV) try { document.body.classList.add('is-tv'); } catch (e) {}
+if (IS_TV) {
+  try { document.body.classList.add('is-tv'); } catch (e) {}
+  try {
+    var _v = document.getElementById('vid');
+    if (_v) _v.removeAttribute('controls');
+  } catch (e) {}
+}
 
 // ── Polyfills for older browsers (e.g. LG WebOS pre-2021) ─
 if (!Promise.allSettled) {
@@ -883,16 +889,17 @@ function parseM3U(text) {
       name  = m     ? m[1].trim()      : null;
       group = gm    ? gm[1] || null    : null;
       lang  = langM ? langM[1] || null : null;
-      // Skip logo regex on TV — we don't render logos so the string is dead weight
       if (!IS_TV) {
         const lm = line.match(/tvg-logo="([^"]*)"/);
         logo = lm ? lm[1] || null : null;
       }
     } else if (!line.startsWith('#')) {
-      // On TV we omit the logo field entirely to save per-entry memory
-      out.push(IS_TV
-        ? { name: name || line, url: line, group, language: lang }
-        : { name: name || line, url: line, logo, group, language: lang });
+      // Only set non-null fields — saves per-object memory across thousands of entries
+      const o = { name: name || line, url: line };
+      if (group) o.group = group;
+      if (lang) o.language = lang;
+      if (!IS_TV && logo) o.logo = logo;
+      out.push(o);
       name = null;
       logo = null;
       group = null;
@@ -1509,6 +1516,7 @@ function loadFromSources(opts) {
         if (isStreamSrc) streamMap.set(s.url, s);
         else metaMap.set(s.url, s);
       });
+      r.value = null; // drop the raw M3U text so GC can reclaim it
     });
 
     if (!IS_TV) {
@@ -1571,7 +1579,16 @@ function updateFsIcon() {
   const outIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
   document.getElementById('btn-fs').innerHTML = document.fullscreenElement ? outIcon : inIcon;
 }
-document.addEventListener('fullscreenchange', updateFsIcon);
+document.addEventListener('fullscreenchange', function () {
+  updateFsIcon();
+  // Hide the native <video> controls (timeline bar etc.) in fullscreen — some
+  // browsers don't auto-hide them. Restore on exit, unless on TV where we keep
+  // them hidden permanently.
+  var v = document.getElementById('vid');
+  if (!v) return;
+  if (document.fullscreenElement || IS_TV) v.removeAttribute('controls');
+  else v.setAttribute('controls', '');
+});
 
 // ── Theme ─────────────────────────────────────────────────
 function applyTheme(name) {
