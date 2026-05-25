@@ -64,6 +64,7 @@
       filter: none;
     }
     body.is-tv .stream-list::-webkit-scrollbar { width: 0; }
+    body.fs-idle, body.fs-idle * { cursor: none !important; }
     body.is-tv .tv-hidden { display: none !important; }
     body.is-tv .az-jump { display: none; }
     .tv-only { display: none; }
@@ -594,7 +595,7 @@
   <span id="status">Open an M3U file to begin</span>
   <span class="tv-hidden" style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click or long-press: favorite</span>
   <span class="tv-only" style="margin-left:auto">Select: play &nbsp;·&nbsp; ↑/↓: cycle channels &nbsp;·&nbsp; Favorite: long press</span>
-  <span class="version" id="version">v0.6.2</span>
+  <span class="version" id="version">v0.6.4</span>
 </footer>
 
 <div id="ctx">
@@ -1575,13 +1576,45 @@ function updateFsIcon() {
 }
 document.addEventListener('fullscreenchange', function () {
   updateFsIcon();
-  // Hide the native <video> controls (timeline bar etc.) only in fullscreen —
-  // some browsers don't auto-hide them. Restore on exit.
-  var v = document.getElementById('vid');
-  if (!v) return;
-  if (document.fullscreenElement) v.removeAttribute('controls');
-  else v.setAttribute('controls', '');
+  if (document.fullscreenElement) {
+    fsActivity();             // start visible, schedule hide
+  } else {
+    fsCancelHide();
+    fsShow();
+  }
 });
+
+// ── Fullscreen auto-hide (video controls + cursor) ────────
+var FS_IDLE_MS = 3000;
+var fsHideTimer = null;
+
+function fsShow() {
+  var v = document.getElementById('vid');
+  if (v && !v.hasAttribute('controls')) v.setAttribute('controls', '');
+  document.body.classList.remove('fs-idle');
+}
+
+function fsHide() {
+  if (!document.fullscreenElement) return;
+  var v = document.getElementById('vid');
+  if (v) v.removeAttribute('controls');
+  document.body.classList.add('fs-idle');
+}
+
+function fsCancelHide() {
+  if (fsHideTimer) { clearTimeout(fsHideTimer); fsHideTimer = null; }
+}
+
+function fsActivity() {
+  if (!document.fullscreenElement) return;
+  fsShow();
+  fsCancelHide();
+  fsHideTimer = setTimeout(fsHide, FS_IDLE_MS);
+}
+
+// Any user input while fullscreen resets the hide timer.
+['mousemove', 'mousedown', 'click', 'keydown', 'touchstart', 'touchmove', 'wheel']
+  .forEach(function (evt) { document.addEventListener(evt, fsActivity, true); });
 
 // ── Theme ─────────────────────────────────────────────────
 function applyTheme(name) {
