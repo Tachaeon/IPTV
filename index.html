@@ -531,7 +531,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.7</span>
+  <span class="version" id="version">v0.5.8</span>
 </footer>
 
 <div id="ctx">
@@ -539,6 +539,18 @@
 </div>
 
 <script>
+// ── Polyfills for older browsers (e.g. LG WebOS pre-2021) ─
+if (!Promise.allSettled) {
+  Promise.allSettled = function (promises) {
+    return Promise.all(promises.map(function (p) {
+      return Promise.resolve(p).then(
+        function (value)  { return { status: 'fulfilled', value: value }; },
+        function (reason) { return { status: 'rejected',  reason: reason }; }
+      );
+    }));
+  };
+}
+
 // ── Proxy routing ─────────────────────────────────────────
 // Cloudflare Worker URL for proxying mixed-content / CORS-blocked streams.
 // See cloudflare-worker/README.md for deployment. Leave empty to disable.
@@ -1488,6 +1500,9 @@ loadFromSources().then(() => {
       if (items[idx]) items[idx].scrollIntoView({ block: 'center' });
     }
   } catch {}
+}).catch(err => {
+  console.error('Initial load failed:', err);
+  setStatus('Initial load failed: ' + (err && err.message ? err.message : err));
 });
 </script>
 </body>
