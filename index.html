@@ -10,6 +10,14 @@
       var t = localStorage.getItem('theme');
       if (t && t !== 'tokyo-night') document.documentElement.setAttribute('data-theme', t);
     })();
+    // Surface any uncaught script error in the status bar (helps debug on
+    // devices without dev tools, e.g. LG WebOS TVs).
+    window.addEventListener('error', function (ev) {
+      var el = document.getElementById('status');
+      if (el) el.textContent = 'JS error: ' + (ev.message || 'unknown') +
+        (ev.filename ? ' @' + ev.filename.split('/').pop() : '') +
+        (ev.lineno ? ':' + ev.lineno : '');
+    });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
   <style>
@@ -531,7 +539,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.8</span>
+  <span class="version" id="version">v0.5.9</span>
 </footer>
 
 <div id="ctx">
@@ -683,7 +691,7 @@ const LOGO_SOURCES = [
 
 // ── Favorites ─────────────────────────────────────────────
 function loadFavs() {
-  try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch (e) { return []; }
 }
 function saveFavs() { localStorage.setItem(FAV_KEY, JSON.stringify(favorites)); }
 function isFav(url) { return favorites.some(f => f.url === url); }
@@ -720,7 +728,7 @@ function loadFailed() {
       });
     }
     return map;
-  } catch { return new Map(); }
+  } catch (e) { return new Map(); }
 }
 function saveFailed() {
   localStorage.setItem(FAILED_KEY, JSON.stringify([...failed.entries()]));
@@ -773,7 +781,7 @@ function resetAllSettings() {
 
 // ── Recents ───────────────────────────────────────────────
 function loadRecents() {
-  try { return JSON.parse(localStorage.getItem(REC_KEY) || '[]'); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(REC_KEY) || '[]'); } catch (e) { return []; }
 }
 function saveRecents() { localStorage.setItem(REC_KEY, JSON.stringify(recents)); }
 
@@ -882,8 +890,9 @@ function loadFilterState() {
   const defaults = { pluto: true, shop: true, rel: true, noneng: true, geo: true };
   try {
     const saved = JSON.parse(localStorage.getItem(FILTERS_KEY) || 'null');
-    return saved ? { ...defaults, ...saved } : defaults;
-  } catch { return defaults; }
+    if (!saved) return defaults;
+    return Object.assign({}, defaults, saved);
+  } catch (e) { return defaults; }
 }
 function getFilterChip(key) {
   return document.querySelector('.chip[data-filter="' + key + '"]');
@@ -979,7 +988,7 @@ const vid = document.getElementById('vid');
 function play(url, name) {
   playingUrl  = url;
   playingName = name;
-  try { localStorage.setItem(LAST_KEY, JSON.stringify({ url, name })); } catch {}
+  try { localStorage.setItem(LAST_KEY, JSON.stringify({ url, name })); } catch (e) {}
   cancelAutoSkip();
   addRecent(name, url);
   document.getElementById('err-overlay').classList.remove('visible');
@@ -1269,7 +1278,7 @@ const browseItems = [
     const parts = f.replace('.m3u', '').split('_');
     const cc = parts[0] === 'uk' ? 'GB' : parts[0].toUpperCase();
     let country = cc;
-    try { country = _rn.of(cc) || cc; } catch {}
+    try { country = _rn.of(cc) || cc; } catch (e) {}
     const label = parts.length > 1
       ? country + ' — ' + (PROVIDER_MAP[parts.slice(1).join('_')] || parts.slice(1).join(' '))
       : country;
@@ -1315,65 +1324,69 @@ function fetchPlaylist(filename, label) {
   }
 }
 
-async function loadFromSources(opts = {}) {
-  const all = [...STREAM_SOURCES, ...LOGO_SOURCES];
-  setStatus(`Fetching ${STREAM_SOURCES.length} stream feeds + ${LOGO_SOURCES.length} logo feeds…`);
-  const results = await Promise.allSettled(
-    all.map(u => fetch(u).then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))))
-  );
-
-  const streamMap = new Map();
-  const metaMap = new Map();
-  let okStreams = 0, okLogos = 0, fail = 0;
-
-  results.forEach((r, i) => {
-    if (r.status !== 'fulfilled') {
-      fail++;
-      console.warn('Source failed:', all[i], r.reason);
-      return;
-    }
-    const isStreamSrc = i < STREAM_SOURCES.length;
-    if (isStreamSrc) okStreams++; else okLogos++;
-    parseM3U(r.value).forEach(s => {
-      if (isStreamSrc) streamMap.set(s.url, s);
-      else metaMap.set(s.url, s);
+function loadFromSources(opts) {
+  opts = opts || {};
+  const all = STREAM_SOURCES.concat(LOGO_SOURCES);
+  setStatus('Fetching ' + STREAM_SOURCES.length + ' stream feeds + ' + LOGO_SOURCES.length + ' logo feeds…');
+  const fetches = all.map(function (u) {
+    return fetch(u).then(function (r) {
+      if (!r.ok) return Promise.reject(new Error('HTTP ' + r.status));
+      return r.text();
     });
   });
+  return Promise.allSettled(fetches).then(function (results) {
+    const streamMap = new Map();
+    const metaMap = new Map();
+    let okStreams = 0, okLogos = 0, fail = 0;
 
-  // Overlay region metadata (logos, group titles, languages) onto matching stream URLs
-  streamMap.forEach(s => {
-    const meta = metaMap.get(s.url);
-    if (!meta) return;
-    if (meta.logo)     s.logo     = meta.logo;
-    if (meta.group)    s.group    = meta.group;
-    if (meta.language) s.language = meta.language;
+    results.forEach(function (r, i) {
+      if (r.status !== 'fulfilled') {
+        fail++;
+        console.warn('Source failed:', all[i], r.reason);
+        return;
+      }
+      const isStreamSrc = i < STREAM_SOURCES.length;
+      if (isStreamSrc) okStreams++; else okLogos++;
+      parseM3U(r.value).forEach(function (s) {
+        if (isStreamSrc) streamMap.set(s.url, s);
+        else metaMap.set(s.url, s);
+      });
+    });
+
+    // Overlay region metadata onto matching stream URLs
+    streamMap.forEach(function (s) {
+      const meta = metaMap.get(s.url);
+      if (!meta) return;
+      if (meta.logo)     s.logo     = meta.logo;
+      if (meta.group)    s.group    = meta.group;
+      if (meta.language) s.language = meta.language;
+    });
+
+    // Name-based logo fallback
+    const nameLogoMap = new Map();
+    const addNameLogo = function (s) {
+      if (!s.logo) return;
+      const key = normalizeChannelName(s.name);
+      if (key && !nameLogoMap.has(key)) nameLogoMap.set(key, s.logo);
+    };
+    streamMap.forEach(addNameLogo);
+    metaMap.forEach(addNameLogo);
+    streamMap.forEach(function (s) {
+      if (s.logo) return;
+      const key = normalizeChannelName(s.name);
+      if (key && nameLogoMap.has(key)) s.logo = nameLogoMap.get(key);
+    });
+
+    allStreams = Array.from(streamMap.values()).sort(function (a, b) {
+      return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+    });
+    refreshGroupOptions();
+    filterStreams();
+    document.getElementById('badge').textContent = allStreams.length.toLocaleString() + ' streams';
+    const tail = fail ? ' (' + fail + ' feed' + (fail === 1 ? '' : 's') + ' failed)' : '';
+    setStatus('Loaded ' + allStreams.length.toLocaleString() + ' streams from ' + okStreams + ' feeds + ' + okLogos + ' logo feeds' + tail);
+    if (opts.switchTab) switchTab('streams');
   });
-
-  // Fallback: name-based logo match for streams still missing a logo.
-  // Build a normalized-name → logo map from anything that has a logo, then
-  // backfill streams whose URL didn't appear in the region metadata.
-  const nameLogoMap = new Map();
-  const addNameLogo = s => {
-    if (!s.logo) return;
-    const key = normalizeChannelName(s.name);
-    if (key && !nameLogoMap.has(key)) nameLogoMap.set(key, s.logo);
-  };
-  streamMap.forEach(addNameLogo);
-  metaMap.forEach(addNameLogo);
-  streamMap.forEach(s => {
-    if (s.logo) return;
-    const key = normalizeChannelName(s.name);
-    if (key && nameLogoMap.has(key)) s.logo = nameLogoMap.get(key);
-  });
-
-  allStreams = [...streamMap.values()]
-    .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
-  refreshGroupOptions();
-  filterStreams();
-  document.getElementById('badge').textContent = allStreams.length.toLocaleString() + ' streams';
-  const tail = fail ? ` (${fail} feed${fail === 1 ? '' : 's'} failed)` : '';
-  setStatus(`Loaded ${allStreams.length.toLocaleString()} streams from ${okStreams} feeds + ${okLogos} logo feeds${tail}`);
-  if (opts.switchTab) switchTab('streams');
 }
 
 function promptLoadUrl() {
@@ -1499,7 +1512,7 @@ loadFromSources().then(() => {
       const items = document.getElementById('lst-streams').querySelectorAll('.stream-item');
       if (items[idx]) items[idx].scrollIntoView({ block: 'center' });
     }
-  } catch {}
+  } catch (e) {}
 }).catch(err => {
   console.error('Initial load failed:', err);
   setStatus('Initial load failed: ' + (err && err.message ? err.message : err));
