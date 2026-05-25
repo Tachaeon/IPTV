@@ -560,7 +560,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.13</span>
+  <span class="version" id="version">v0.5.14</span>
 </footer>
 
 <div id="ctx">
@@ -568,6 +568,12 @@
 </div>
 
 <script>
+// ── TV detection ──────────────────────────────────────────
+// Smart TVs (LG WebOS, Samsung Tizen, etc.) struggle with thousands of
+// <img> elements at once. Detected via User-Agent so we can skip rendering
+// logos on TV and avoid memory crashes.
+var IS_TV = /web[0o]s|smart-?tv|tizen|hbbtv|netcast|viera|hisense/i.test(navigator.userAgent || '');
+
 // ── Polyfills for older browsers (e.g. LG WebOS pre-2021) ─
 if (!Promise.allSettled) {
   Promise.allSettled = function (promises) {
@@ -891,7 +897,7 @@ function renderList(items, containerId, store) {
     return;
   }
   el.innerHTML = items.map((s, i) => {
-    const logo = s.logo && s.logo.startsWith('http')
+    const logo = (!IS_TV && s.logo && s.logo.startsWith('http'))
       ? `<img class="stream-logo" src="${esc(s.logo)}" loading="lazy" onerror="this.style.visibility='hidden'" alt="">`
       : '';
     const isFail = isFailed(s.url);
