@@ -15,6 +15,10 @@
     window.addEventListener('error', function (ev) {
       var el = document.getElementById('status');
       if (!el) return;
+      // Don't trample a success message — if streams already loaded, the
+      // error is most likely from HLS.js CDN failing to parse and is not
+      // actually blocking the app.
+      if (el.textContent.indexOf('Loaded') === 0) return;
       var msg = ev.message || 'unknown';
       var loc = '';
       if (ev.filename) {
@@ -556,7 +560,7 @@
   <div class="status-dot" id="dot"></div>
   <span id="status">Open an M3U file to begin</span>
   <span style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click: favorite</span>
-  <span class="version" id="version">v0.5.11</span>
+  <span class="version" id="version">v0.5.13</span>
 </footer>
 
 <div id="ctx">
@@ -1293,14 +1297,20 @@ const PLAYLIST_FILES = [
   'xk.m3u','ye.m3u','yt.m3u','za.m3u','za_freevisiontv.m3u','zm.m3u','zw.m3u'
 ];
 
-const _rn = new Intl.DisplayNames(['en'], { type: 'region' });
+// Intl.DisplayNames is Chromium 81+; WebOS 5 (Chromium 68) doesn't have it.
+// Fall back to bare country codes when unavailable.
+var _rn = null;
+try { _rn = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) {}
+
 const browseItems = [
   { filename: '__DEFAULT__', label: '★ Combined Sources (Default)' },
   ...PLAYLIST_FILES.map(f => {
     const parts = f.replace('.m3u', '').split('_');
     const cc = parts[0] === 'uk' ? 'GB' : parts[0].toUpperCase();
     let country = cc;
-    try { country = _rn.of(cc) || cc; } catch (e) {}
+    if (_rn) {
+      try { country = _rn.of(cc) || cc; } catch (e) {}
+    }
     const label = parts.length > 1
       ? country + ' — ' + (PROVIDER_MAP[parts.slice(1).join('_')] || parts.slice(1).join(' '))
       : country;
