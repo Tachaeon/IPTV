@@ -594,7 +594,7 @@
   <span id="status">Open an M3U file to begin</span>
   <span class="tv-hidden" style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click or long-press: favorite</span>
   <span class="tv-only" style="margin-left:auto">Select: play &nbsp;·&nbsp; ↑/↓: cycle channels &nbsp;·&nbsp; Favorite: long press</span>
-  <span class="version" id="version">v0.6.1</span>
+  <span class="version" id="version">v0.6.2</span>
 </footer>
 
 <div id="ctx">
@@ -607,13 +607,7 @@
 // via User-Agent so we can skip logos, transitions, and hover effects to
 // avoid memory crashes and rendering jank.
 var IS_TV = /web[0o]s|smart-?tv|tizen|hbbtv|netcast|viera|hisense/i.test(navigator.userAgent || '');
-if (IS_TV) {
-  try { document.body.classList.add('is-tv'); } catch (e) {}
-  try {
-    var _v = document.getElementById('vid');
-    if (_v) _v.removeAttribute('controls');
-  } catch (e) {}
-}
+if (IS_TV) try { document.body.classList.add('is-tv'); } catch (e) {}
 
 // ── Polyfills for older browsers (e.g. LG WebOS pre-2021) ─
 if (!Promise.allSettled) {
@@ -1581,12 +1575,11 @@ function updateFsIcon() {
 }
 document.addEventListener('fullscreenchange', function () {
   updateFsIcon();
-  // Hide the native <video> controls (timeline bar etc.) in fullscreen — some
-  // browsers don't auto-hide them. Restore on exit, unless on TV where we keep
-  // them hidden permanently.
+  // Hide the native <video> controls (timeline bar etc.) only in fullscreen —
+  // some browsers don't auto-hide them. Restore on exit.
   var v = document.getElementById('vid');
   if (!v) return;
-  if (document.fullscreenElement || IS_TV) v.removeAttribute('controls');
+  if (document.fullscreenElement) v.removeAttribute('controls');
   else v.setAttribute('controls', '');
 });
 
