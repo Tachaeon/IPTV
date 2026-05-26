@@ -22,18 +22,20 @@ If you need to test a stream URL whose host blocks browser fetches, copy `Archiv
 
 ## Web app architecture (`index.html`)
 
-No framework, no build step. Single `<script>` block. HLS.js loaded from CDN.
+No framework, no build step. Single `<script>` block. HLS.js (light variant) loaded from CDN with `crossorigin="anonymous"` so its errors come through with details.
 
 ### Source loading
 
 Two parallel arrays drive the default load:
 
-- `STREAM_SOURCES` — raw iptv-org country playlists (`us`, `uk`, `ca`, `au`). Channels come **only** from these.
-- `LOGO_SOURCES` — iptv-org region aggregates (`eur`, `amer`, `oce`). Used **only** as metadata. Their entries are parsed into a `metaMap` keyed by URL; any `tvg-logo`, `group-title`, and `tvg-language` they carry is overlaid onto matching stream entries.
+- `STREAM_SOURCES` — 46 raw iptv-org country/provider playlists across `us` (32 variants), `uk` (5), `ca` (4), `au` (2), and `nz` (2). Channels come **only** from these.
+- `LOGO_SOURCES` — iptv-org region aggregates (`eur`, `amer`, `oce`). Used **only** as metadata for logo/group/language enrichment. **Skipped on TV** since logos aren't rendered there.
 
-`loadFromSources()` fetches all seven feeds via `Promise.allSettled` (one failure doesn't abort the rest), merges into a `streamMap` keyed by URL (dedupes across the country files), applies the URL-based metadata overlay, then runs a name-based logo fallback (normalized-name → logo map built from anything with a logo; backfills streams still missing one), then alphabetizes. No filtering happens here — the filter chip UI handles that at render time.
+`loadFromSources()` fetches all sources via `Promise.allSettled` (one failure doesn't abort the rest), merges into a `streamMap` keyed by URL (dedupes across overlapping country files like `us.m3u` + `us_pluto.m3u`), applies the URL-based metadata overlay, runs a name-based logo fallback (normalized-name → logo map built from anything with a logo; backfills streams still missing one), then alphabetizes. After parsing each source's response text, the raw string is dropped (`r.value = null`) so GC can reclaim it before the rest of processing runs.
 
 `normalizeChannelName(name)` strips quality markers (`(720p)`, `(1080p)`, `(4K)`, trailing `HD`/`SD`/`UHD`/`FHD`), bracket annotations (`[Geo-blocked]`, `[Not 24/7]`), and punctuation. So `BBC One (720p)` and `BBC One HD` both collapse to `bbc one` for matching.
+
+`parseM3U` only sets `group`, `language`, `logo` fields on the returned object when actually populated, keeping object shapes compact when EXTINF lines lack those attributes.
 
 ### State & storage
 
@@ -48,7 +50,7 @@ State `let`s at the top of the script (`allStreams`, `favorites`, `recents`, `fa
 | `stream-launcher-muted` | Saved mute state |
 | `stream-launcher-failed` | Map of URL → timestamp of last failure (24h TTL) |
 | `stream-launcher-sidebar-width` | Custom sidebar width |
-| `stream-launcher-filters` | Filter chip state (pluto/shop/rel/noneng) |
+| `stream-launcher-filters` | Filter chip state (pluto/shop/rel/noneng/geo) |
 | `theme` | Active theme name |
 | `sidebar-collapsed` | Sidebar collapsed flag |
 
@@ -56,17 +58,54 @@ The **Reset** button in the header wipes all of these and reloads.
 
 ### Central functions
 
-- `parseM3U(text)` — walks EXTINF/URL pairs, extracts `name`, `url`, `logo`, `group`, `language` (from `tvg-logo` / `group-title` / `tvg-language` attributes).
-- `loadFromSources({switchTab})` — multi-source loader used by the page-load default load and the Browse tab's `__DEFAULT__` row. Returns a promise.
+- `parseM3U(text)` — walks EXTINF/URL pairs, extracts `name`, `url`, plus `logo`/`group`/`language` only when present.
+- `loadFromSources({switchTab})` — multi-source loader; used by page-load default and Browse tab's `__DEFAULT__` row. Returns a promise.
 - `loadFromUrl(url, label, {switchTab})` — single-URL loader used by file input, URL prompt, and per-country Browse rows.
-- `renderList(items, containerId, store)` — uniform renderer for Streams, Favorites, Recent. Adds `playing` class to the current row and `failed` class + red dot for streams marked failed *within the last 24 h* (uses `isFailed(url)` which lazy-prunes expired marks).
-- `play(url, name)` — saves last-played, adds to Recents, cancels auto-skip, sets up HLS.js or native playback, updates `<title>`.
+- `renderList(items, containerId, store)` — uniform renderer. On TV + `lst-streams`, delegates to `renderVirtual` for windowed rendering; otherwise renders the full list. Adds `playing` and `failed` classes.
+- `renderVirtual(el, items)` — virtual scrolling: phantom container with full virtual height, absolutely-positioned window containing only visible rows + 8-row buffer. `requestAnimationFrame`-throttled scroll handler swaps rows.
+- `scrollListToIndex(listId, idx, block)` — helper for `cycleChannel` / `jumpToLetter` / auto-resume. On the virtualized list uses `scrollTop = idx * TV_ROW_HEIGHT` (with center/nearest variants); elsewhere falls back to `items[idx].scrollIntoView`.
+- `play(url, name)` — saves last-played, adds to Recents, cancels auto-skip, sets up HLS.js or native playback via `maybeProxy()`, updates `<title>`.
 - `showError(msg)` — central error handler: shows the overlay, marks the URL as failed, schedules auto-skip in 3s.
-- `wireList(containerId, store)` — attaches click, contextmenu, mouse long-press, and touch long-press handlers.
-- `cycleChannel(dir)` — used by arrow keys + auto-skip. Cycles through whichever tab is currently active (Streams / Favs / Recent).
-- `toggleFilter(key)` — flips one of the four filter chips and re-renders. `FILTER_PREDICATES` defines the four detectors (`pluto`, `shop`, `rel`, `noneng`).
-- `updateAzJump()` / `jumpToLetter(letter)` — rebuilds the A-Z strip's first-occurrence index after every `filterStreams()`, and handles letter clicks by scrolling the matching row into view.
-- `maybeProxy(url)` — decides whether to route a URL through `serve.ps1`'s `/proxy` (localhost), the Cloudflare Worker (production + http://), or pass through unchanged.
+- `wireList(containerId, store)` — attaches click, contextmenu, mouse long-press, touch long-press handlers.
+- `cycleChannel(dir)` — used by arrow keys + auto-skip. Cycles through whichever tab is currently active.
+- `toggleFilter(key)` — flips one of the five filter chips and re-renders. `FILTER_PREDICATES` defines the detectors (`pluto`, `shop`, `rel`, `noneng`, `geo`).
+- `toggleCinema()` — toggles `body.cinema-mode` (retracts header/footer/sidebar). `C` hotkey or visible X button or `Esc`.
+- `toggleFullscreen()` / `updateFsIcon()` — page fullscreen via `document.documentElement.requestFullscreen()`. Activity-tracked auto-hide for native `<video>` controls + cursor while in fullscreen (`fsActivity`/`fsShow`/`fsHide`, 3-second idle, capture-phase listeners on `mousemove`/`mousedown`/`click`/`keydown`/`touchstart`/`touchmove`/`wheel`).
+- `updateAzJump()` / `jumpToLetter(letter)` — rebuilds the A-Z strip's first-occurrence index after every `filterStreams()`. Short-circuits on TV (strip is hidden).
+- `maybeProxy(url)` — routes a URL through `serve.ps1`'s `/proxy` on localhost, through the Cloudflare Worker for `http://` URLs on production, or passes through unchanged.
+
+### TV mode (`IS_TV`)
+
+User-Agent regex detects LG WebOS / Samsung Tizen / generic SmartTV/HbbTV/Viera/Hisense. When matched, `IS_TV = true` and `body.is-tv` class is set. Mode triggers many separate optimizations to fit constrained TV RAM/CPU:
+
+| Optimization | What it does |
+|---|---|
+| **Skip `<img>` tags in stream rows** | `renderList` omits the `<img class="stream-logo">` entirely — biggest single win at ~1500 rows |
+| **Skip the 3 `LOGO_SOURCES` fetches** | No region-metadata HTTP requests, no `metaMap` allocation, no name-based logo fallback pass |
+| **Skip `tvg-logo=` regex** in `parseM3U` | Less work per EXTINF line |
+| **Omit `logo` field from stream objects** | Smaller per-entry object across thousands of entries |
+| **`body.is-tv` CSS overrides** | All `transition`/`animation`/`:hover` effects killed via `!important`; `stream-list::-webkit-scrollbar` width 0 |
+| **`.tv-hidden` class** | Hides desktop-only UI on TV (currently: Open URL + Open M3U buttons) |
+| **`.tv-only` class** | Shows TV-only UI (the simpler footer hint: "Select: play · ↑/↓: cycle channels · Favorite: long press") |
+| **Hide A-Z jump strip** | `body.is-tv .az-jump { display: none }`; `updateAzJump` short-circuits to skip rebuild work |
+| **Virtual scrolling on `lst-streams`** | Only ~30 rows in DOM at a time (visible + 8-row buffer); fixed `28px` row height via `body.is-tv .stream-item { height:28px }` |
+| **Lazy-built Browse tab** | `browseItems` is `null` until first `switchTab('browse')`; `ensureBrowseBuilt()` runs the 290-entry `PLAYLIST_FILES.map` then |
+
+The Reset / theme / cinema-toggle / fullscreen buttons all stay accessible on TV.
+
+### Older-browser compatibility (WebOS 4/5, etc.)
+
+LG WebOS pre-2021 ships Chromium 38–68; Samsung Tizen similar vintage. Several down-levels are in place to avoid parse/runtime aborts on these:
+
+- `Promise.allSettled` (Chromium 76+) — polyfilled in head from `Promise.all` + per-promise reflection
+- `Intl.DisplayNames` (Chromium 81+) — wrapped in try/catch; on failure, Browse-tab labels fall back to bare country codes (`US`/`GB`/`CA`)
+- `async/await` (Chromium 55+) — `loadFromSources` is a plain function returning `.then()` chains
+- Object spread `{...a, ...b}` (Chromium 60+) — replaced with `Object.assign({}, a, b)`
+- Optional `catch {}` (Chromium 66+) — all `catch` clauses bind `(e)`
+- `class extends` (Chromium 49+) — `ProxyLoader` uses prototype-based ES5 (`Object.create` + `Function.prototype.call`)
+- Default parameters (Chromium 49+) — `loadFromUrl` does `opts = opts || {}` inside the body
+
+An early `<script>` in `<head>` installs `window.onerror` and `unhandledrejection` listeners that write the failure into the `#status` element — gives a visible diagnostic on TV browsers without dev tools. The end of the main script writes `"[boot OK] loading…"` into the badge so we can tell the script reached EOF.
 
 ### Failed-mark TTL
 
@@ -74,19 +113,25 @@ The **Reset** button in the header wipes all of these and reloads.
 
 ### Filter chips
 
-Four chip-style toggle buttons sit under the group dropdown: `Pluto`, `Shopping`, `Religious`, `Non-Eng`. Each, when active (`.chip.active`, accent-filled), removes streams matching its predicate from the rendered list. Predicates check both `group-title` and channel name; the `noneng` predicate only fires when `tvg-language` is present and not English, so untagged streams are kept.
+Five chip-style toggle buttons under the group dropdown: `Pluto`, `Shopping`, `Religious`, `Non-Eng`, `Geo-blocked`. Each, when active (`.chip.active`, accent-filled), removes streams matching its predicate from the rendered list. Predicates check both `group-title` and channel name; the `noneng` predicate only fires when `tvg-language` is present and not English, so untagged streams are kept; `geo` matches `geo-blocked`/`geoblocked`/`geo blocked` in the name (catches iptv-org's `[Geo-blocked]` annotation).
 
 `filterStreams()` applies them after the text search and group dropdown. Chips work on every load path — combined sources, file, URL, Browse — not just the default load.
 
-### A-Z jump strip
+### A-Z jump strip (desktop only)
 
-A 14px-wide vertical strip on the *left* side of the streams list with 26 letter buttons (A-Z), each `flex: 1` so they distribute evenly down the list height. Letters with no matching first-character in `shownStreams` are dimmed and disabled. Clicking a letter calls `scrollIntoView({ block: 'start' })` on the first matching `.stream-item`. Index rebuilds on every `filterStreams()`, so it adapts to search, group filter, and category chips.
+A 14px-wide vertical strip on the *left* side of the streams list with 26 letter buttons. Each `flex: 1` so they distribute evenly down the list height. Letters with no matching first-character in `shownStreams` are dimmed and disabled. Clicking calls `scrollListToIndex('lst-streams', idx, 'start')`. Index rebuilds on every `filterStreams()`. Hidden on TV.
 
 ### Themes
 
-CSS variables in `:root` define the default (Tokyo Night). Alternate themes are `[data-theme="light"]` and `[data-theme="gruvbox"]` blocks. An early-paint script in `<head>` reads `localStorage.theme` and sets the `data-theme` attribute *before* the body renders to avoid a flash of wrong theme.
+CSS variables in `:root` define the default (Tokyo Night). Alternate themes are `[data-theme="light"]` and `[data-theme="gruvbox"]` blocks. An early-paint script in `<head>` reads `localStorage.theme` and sets the `data-theme` attribute *before* the body renders to avoid a flash of wrong theme. A `--on-accent` variable handles text on accent-color buttons across themes.
 
-A `--on-accent` variable is used wherever text sits on top of the accent color (e.g. `.btn-primary`, active chips) so it stays readable across themes.
+### Cinema mode
+
+`toggleCinema()` flips a `body.cinema-mode` class. CSS hides `.header`, `.footer`, and `.sidebar` so only the video remains. A fixed-position `.cinema-exit` X button (top-right, transparent with drop-shadow + 50% opacity, full opacity on hover) gives a click-out path that works regardless of input device — important on TVs without a `C` key. `Esc` also exits cinema mode. Triggered by the rectangle icon in the header, the `C` hotkey, or the X overlay.
+
+### Fullscreen auto-hide
+
+While in fullscreen, controls + cursor stay visible until 3 seconds of no input. Capture-phase listeners on `mousemove`/`mousedown`/`click`/`keydown`/`touchstart`/`touchmove`/`wheel` call `fsActivity()` which calls `fsShow()` (re-adds `controls` attribute, removes `body.fs-idle` class) and schedules `fsHide()` 3s later. `fsHide()` removes the `controls` attribute and adds `body.fs-idle` (sets `cursor: none` everywhere). Exiting fullscreen cancels the timer and restores controls.
 
 ### Keyboard shortcuts (gated on focus not being in an input)
 
@@ -95,8 +140,9 @@ A `--on-accent` variable is used wherever text sits on top of the accent color (
 | `↑ / ↓` | Cycle channels in the active tab (only while playing) |
 | `R` | Random channel from the active tab |
 | `F` | Toggle page fullscreen |
+| `C` | Toggle cinema mode |
 | `T` | Toggle sidebar |
-| `Esc` | Close context menu |
+| `Esc` | Close context menu + exit cinema mode |
 
 ### Long-press
 
@@ -104,7 +150,7 @@ A `--on-accent` variable is used wherever text sits on top of the accent color (
 
 ### Browse tab
 
-`PLAYLIST_FILES` (a hardcoded list of country/provider `.m3u` filenames) is mapped to `browseItems` with friendly labels via `PROVIDER_MAP` + `Intl.DisplayNames`. The first entry is a special `{ filename: '__DEFAULT__' }` row that re-runs `loadFromSources()` — gives users a way back to the combined-sources playlist after picking a country.
+`PLAYLIST_FILES` (a hardcoded list of country/provider `.m3u` filenames) is mapped to `browseItems` with friendly labels via `PROVIDER_MAP` + `Intl.DisplayNames` (guarded). On TV (and to save startup CPU on all devices), `browseItems` is `null` until the first `switchTab('browse')` triggers `ensureBrowseBuilt()`. The first entry is a special `{ filename: '__DEFAULT__' }` row that re-runs `loadFromSources()` — gives users a way back to the combined-sources playlist after picking a country.
 
 ### Version label
 
@@ -123,13 +169,13 @@ The Worker fetches the target server-side (where neither restriction applies), f
 
 `index.html` has a `PROXY_URL` constant. When set, `maybeProxy(url)` routes `http://` stream URLs through the worker on production. HTTPS streams go direct so they don't burn the worker's free-tier quota (100k req/day).
 
-The `ProxyLoader` for HLS.js wraps every fetch and re-writes the URL via `maybeProxy()`. **It also overrides `response.url` to the original (pre-proxy) URL inside `onSuccess`** — otherwise HLS.js would use the proxy URL as the base for resolving relative segment URLs in manifests, producing broken paths like `worker.dev/segment1.ts` instead of `origin.com/segment1.ts`. This URL preservation is the key bit; the Worker itself stays simple.
+The `ProxyLoader` for HLS.js wraps every fetch and re-writes the URL via `maybeProxy()`. **It also overrides `response.url` to the original (pre-proxy) URL inside `onSuccess`** — otherwise HLS.js would use the proxy URL as the base for resolving relative segment URLs in manifests, producing broken paths like `worker.dev/segment1.ts` instead of `origin.com/segment1.ts`. This URL preservation is the key bit; the Worker itself stays simple. `ProxyLoader` is a prototype-based constructor (not a `class extends`) for older-browser compatibility.
 
 The non-HLS path (Safari native HLS, direct MP4 streams) also runs `vid.src = maybeProxy(url)`.
 
 ### Deployment
 
-See `cloudflare-worker/README.md` for first-time deployment steps. Summary: create a Worker on cloudflare.com, paste `worker.js`, copy the URL, set `PROXY_URL` in `index.html`, push.
+See `cloudflare-worker/README.md` for first-time deployment steps. Summary: create a Worker on cloudflare.com (use "Start with Hello World!"), paste `worker.js`, copy the URL, set `PROXY_URL` in `index.html`, push.
 
 ### Caveats
 

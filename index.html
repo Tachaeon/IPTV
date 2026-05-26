@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <title>Stream Launcher</title>
+  <title>Tach TV</title>
   <script>
     (function () {
       var t = localStorage.getItem('theme');
@@ -65,6 +65,86 @@
     }
     body.is-tv .stream-list::-webkit-scrollbar { width: 0; }
     body.fs-idle, body.fs-idle * { cursor: none !important; }
+
+    /* ── Settings modal ─────────────────────────────────── */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.visible { display: flex; }
+    .modal {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 380px;
+      max-width: 92%;
+      max-height: 88%;
+      overflow-y: auto;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h2 {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--text);
+    }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 14px 16px; }
+    .modal section { margin-bottom: 18px; }
+    .modal section:last-child { margin-bottom: 0; }
+    .modal section h3 {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .modal section .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .modal section .row > span { flex: 1; font-size: 13px; }
+    .modal section button.modal-btn {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
+      padding: 8px 12px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      text-align: left;
+    }
+    .modal section button.modal-btn:hover { background: var(--hover); }
+    .modal section.danger button.modal-btn { color: var(--red); border-color: rgba(247, 118, 142, 0.3); }
+    .modal section.about { color: var(--muted); font-size: 12px; }
+    .modal section.about p { margin: 3px 0; }
 
     /* Cinema mode — retract header, footer, and sidebar; just the video remains */
     body.cinema-mode .header,
@@ -526,21 +606,54 @@
 
 <header class="header">
   <button class="btn-icon" id="btn-toggle" onclick="toggleSidebar()" title="Toggle sidebar (T)">&#8249;</button>
-  <span class="header-title">Stream Launcher</span>
+  <span class="header-title">Tach TV</span>
   <span class="badge" id="badge">No playlist loaded</span>
   <input type="file" id="file-in" accept=".m3u,.m3u8" style="display:none">
   <button class="btn-icon" onclick="playRandom()" title="Random channel (R)" aria-label="Random channel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
   <button class="btn-icon" onclick="toggleCinema()" title="Hide UI (C)" aria-label="Hide UI"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/></svg></button>
   <button class="btn-icon" id="btn-fs" onclick="toggleFullscreen()" title="Fullscreen (F)" aria-label="Fullscreen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
-  <select class="theme-select" id="theme-select" onchange="applyTheme(this.value)" title="Theme" aria-label="Theme">
-    <option value="tokyo-night">Tokyo Night</option>
-    <option value="light">Light</option>
-    <option value="gruvbox">Gruvbox</option>
-  </select>
+  <button class="btn-icon" onclick="openSettings()" title="Settings" aria-label="Settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
   <button class="btn btn-default tv-hidden" onclick="promptLoadUrl()">Open URL</button>
   <button class="btn btn-primary tv-hidden" onclick="document.getElementById('file-in').click()">Open M3U</button>
-  <button class="btn btn-default" onclick="resetAllSettings()" title="Clear favorites, recents, theme, and all saved data">Reset</button>
 </header>
+
+<!-- Settings modal -->
+<div class="modal-backdrop" id="settings-backdrop" onclick="closeSettings(event)">
+  <div class="modal" role="dialog" aria-labelledby="settings-title">
+    <div class="modal-header">
+      <h2 id="settings-title">Settings</h2>
+      <button class="modal-close" onclick="closeSettings()" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <section>
+        <h3>Appearance</h3>
+        <div class="row">
+          <span>Theme</span>
+          <select class="theme-select" id="theme-select" onchange="applyTheme(this.value)" aria-label="Theme">
+            <option value="tokyo-night">Tokyo Night</option>
+            <option value="light">Light</option>
+            <option value="gruvbox">Gruvbox</option>
+          </select>
+        </div>
+      </section>
+      <section>
+        <h3>Favorites</h3>
+        <button class="modal-btn" onclick="exportFavorites()">⬇ Export favorites to file</button>
+        <button class="modal-btn" onclick="document.getElementById('fav-import').click()">⬆ Import favorites from file</button>
+        <input type="file" id="fav-import" accept=".json,application/json" style="display:none">
+      </section>
+      <section class="danger">
+        <h3>Data</h3>
+        <button class="modal-btn" onclick="resetAllSettings()">Reset all saved data</button>
+      </section>
+      <section class="about">
+        <h3>About</h3>
+        <p>Tach TV <span id="about-version"></span></p>
+        <p id="about-last-modified"></p>
+      </section>
+    </div>
+  </div>
+</div>
 
 <div class="layout">
 
@@ -628,7 +741,7 @@
   <span id="status">Open an M3U file to begin</span>
   <span class="tv-hidden" style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; C: hide UI &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click or long-press: favorite</span>
   <span class="tv-only" style="margin-left:auto">Select: play &nbsp;·&nbsp; ↑/↓: cycle channels &nbsp;·&nbsp; Favorite: long press</span>
-  <span class="version" id="version">v0.6.7</span>
+  <span class="version" id="version">v0.7.0</span>
 </footer>
 
 <div id="ctx">
@@ -1173,7 +1286,7 @@ function play(url, name) {
 
   document.getElementById('idle').style.display   = 'none';
   document.getElementById('player').classList.add('visible');
-  document.title = '▶ ' + name + ' — Stream Launcher';
+  document.title = '▶ ' + name + ' — Tach TV';
 
   if (hlsInst) { hlsInst.destroy(); hlsInst = null; }
 
@@ -1317,6 +1430,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     hideCtx();
     document.body.classList.remove('cinema-mode');
+    document.getElementById('settings-backdrop').classList.remove('visible');
     return;
   }
   if (document.activeElement.tagName === 'INPUT') return;
@@ -1602,6 +1716,35 @@ function promptLoadUrl() {
 // ── Status ────────────────────────────────────────────────
 function setStatus(msg) { document.getElementById('status').textContent = msg; }
 
+// ── Settings modal ────────────────────────────────────────
+function openSettings() {
+  document.getElementById('settings-backdrop').classList.add('visible');
+}
+function closeSettings(e) {
+  // Backdrop click: only close if the click was on the backdrop itself, not its child modal
+  if (e && e.target && e.target !== document.getElementById('settings-backdrop')) return;
+  document.getElementById('settings-backdrop').classList.remove('visible');
+}
+
+function exportFavorites() {
+  try {
+    if (!favorites || !favorites.length) { setStatus('No favorites to export'); return; }
+    const data = JSON.stringify(favorites, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tach-tv-favorites-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    setStatus('Exported ' + favorites.length + ' favorite' + (favorites.length === 1 ? '' : 's'));
+  } catch (err) {
+    setStatus('Export failed: ' + (err && err.message ? err.message : err));
+  }
+}
+
 // ── Cinema mode (retract header, footer, sidebar) ─────────
 function toggleCinema() {
   document.body.classList.toggle('cinema-mode');
@@ -1738,6 +1881,37 @@ document.getElementById('lst-browse').addEventListener('click', e => {
   if (b) fetchPlaylist(b.filename, b.label);
 });
 
+document.getElementById('fav-import').addEventListener('change', function (e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('Expected a JSON array');
+      const valid = data.filter(function (f) { return f && typeof f.name === 'string' && typeof f.url === 'string'; });
+      if (!valid.length) throw new Error('No valid entries found (need {name, url})');
+      const existing = {};
+      favorites.forEach(function (f) { existing[f.url] = true; });
+      let added = 0;
+      valid.forEach(function (f) {
+        if (existing[f.url]) return;
+        favorites.push({ name: f.name, url: f.url });
+        existing[f.url] = true;
+        added++;
+      });
+      saveFavs();
+      refreshFavs();
+      setStatus('Imported ' + added + ' new favorite' + (added === 1 ? '' : 's') +
+        (valid.length - added > 0 ? ' (' + (valid.length - added) + ' already existed)' : ''));
+    } catch (err) {
+      setStatus('Import failed: ' + (err && err.message ? err.message : err));
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
 if (localStorage.getItem('sidebar-collapsed') === '1') {
   document.querySelector('.sidebar').classList.add('collapsed');
   document.getElementById('btn-toggle').innerHTML = '&#8250;';
@@ -1746,6 +1920,11 @@ if (localStorage.getItem('sidebar-collapsed') === '1') {
 document.getElementById('theme-select').value = localStorage.getItem('theme') || 'tokyo-night';
 updateFsIcon();
 document.getElementById('version').title = 'Last modified: ' + document.lastModified;
+try {
+  const ver = document.getElementById('version').textContent;
+  document.getElementById('about-version').textContent = ver;
+  document.getElementById('about-last-modified').textContent = 'Last modified: ' + document.lastModified;
+} catch (e) {}
 
 loadFromSources().then(() => {
   try {

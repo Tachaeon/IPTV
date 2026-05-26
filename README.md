@@ -1,29 +1,31 @@
 # IPTV Stream Launcher
 
-A single-file web-based IPTV player. Builds a deduped, alphabetized stream list from multiple iptv-org feeds on page load, with logos overlaid from the iptv-org region playlists. Themes, favorites, recent list, group filter, category filters, A-Z jump strip, auto-skip dead streams, plenty of keyboard shortcuts. Includes an optional Cloudflare Worker proxy for streams that hit browser security restrictions.
+A single-file web-based IPTV player. Builds a deduped, alphabetized stream list from ~50 iptv-org country/provider feeds on page load, with logos overlaid from the iptv-org region playlists. Themes, favorites, recent list, category filters, A-Z jump strip, cinema mode, auto-skip dead streams, plenty of keyboard shortcuts. Optimized for smart TVs. Optional Cloudflare Worker proxy for streams that hit browser security restrictions.
 
 **Live demo:** <https://tachaeon.github.io/IPTV/>
 
 ## Features
 
-- **Combined-sources playlist auto-loads** — pulls from the iptv-org `us`, `uk`, `ca`, and `au` country files in parallel, deduplicates by URL, and alphabetizes
-- **Logo enrichment, two passes** — region aggregates (`eur`, `amer`, `oce`) are fetched as metadata-only sources; logos overlay on matching stream URLs, then a name-based fallback fills any remaining gaps (e.g. duplicate "BBC News Pashto" entries share the same logo)
-- **Category filter chips** — toggle Pluto / Shopping / Religious / Non-English on or off; state persists
-- **A-Z jump strip** — vertical letter strip on the left of the streams list; click a letter to scroll to the first matching stream
+- **Combined-sources playlist auto-loads** — 46 iptv-org feeds across US, UK, CA, AU, NZ (and provider variants: Pluto, Samsung TV Plus, BBC, Distro, Stingray, Roku, Xumo, Plex, Tubi, …) merged + deduped on page load
+- **Logo enrichment, two passes** — region aggregates (`eur`, `amer`, `oce`) supply logos; URL-keyed overlay first, then normalized-name fallback so duplicate channels share artwork
+- **Five category filter chips** — toggle Pluto / Shopping / Religious / Non-English / Geo-blocked; state persists
+- **A-Z jump strip** — vertical letter strip on the left of the streams list; click to scroll to first matching channel
+- **Cinema mode** — `C` (or icon, or X overlay) retracts header / footer / sidebar for a distraction-free view
+- **Smart TV optimized** — auto-detects LG WebOS / Samsung Tizen / generic SmartTV; logos skipped, virtual scrolling on the streams list (~30 DOM rows vs 1500+), CSS effects killed, Browse tab lazy-built. Works on WebOS 5 (2020 LG OLED CX) and newer.
 - **Browse 200+ country/provider playlists** — pulled live from [iptv-org/iptv](https://github.com/iptv-org/iptv)
 - **Load from file or URL** — open any local `.m3u` / `.m3u8` or paste a URL
-- **Favorites** — right-click (or long-press) any stream to favorite
+- **Favorites** — right-click (or long-press on mouse or touch) any stream to favorite
 - **Recently played** — last 10 channels tracked automatically
 - **Auto-resume** — picks up where you left off on page reload (scrolls to the playing row)
 - **Auto-skip dead streams** — fails over to the next channel after 3 seconds
-- **Failed-stream indicator** — red dot on streams that died, with a 24 h TTL so off-air channels get a fresh chance the next day
-- **Group filter** — filter by `group-title` (Sports, News, Movies…)
+- **Failed-stream indicator** — red dot on streams that died; 24 h TTL so off-air channels get a fresh chance the next day
+- **Group filter** — dropdown filter by `group-title` (Sports, News, Movies…)
 - **Channel cycling** — ↑/↓ to surf without taking your hand off the keyboard
 - **Random channel** — `R` to surprise yourself
 - **Three themes** — Tokyo Night (dark), Light, Gruvbox
 - **Resizable sidebar** — drag the right edge
 - **Volume persistence** — remembers your level (and mute state) across sessions
-- **Page fullscreen** — `F` key or button
+- **Page fullscreen** — `F` key or button; native `<video>` controls + cursor auto-hide after 3s idle while in fullscreen
 - **Optional Cloudflare Worker proxy** — bypasses mixed-content / CORS so `http://` streams play on the live GH Pages site
 - **Reset button** — clear all saved data in one click
 - **Version label** in the footer; hover for last-modified timestamp
@@ -35,8 +37,9 @@ A single-file web-based IPTV player. Builds a deduped, alphabetized stream list 
 | `↑` / `↓` | Cycle channels in the active tab (while playing) |
 | `R` | Random channel from the active tab |
 | `F` | Toggle page fullscreen |
+| `C` | Toggle cinema mode (hide header/footer/sidebar) |
 | `T` | Toggle sidebar |
-| `Esc` | Close context menu |
+| `Esc` | Close context menu + exit cinema mode |
 
 Click any stream to play. Right-click (or long-press on touch / hold left-click on mouse) to manage favorites.
 
@@ -51,11 +54,30 @@ Click any stream to play. Right-click (or long-press on touch / hold left-click 
 | `LICENSE` | MIT |
 | `Archived/` | Legacy PowerShell apps and local dev server — see below |
 
+## Smart TV support
+
+The app auto-detects LG WebOS / Samsung Tizen / generic SmartTV user agents and adjusts:
+
+- Skips rendering logo `<img>` tags (the biggest TV memory hog)
+- Skips fetching the 3 region-metadata feeds entirely
+- Drops irrelevant UI (Open URL, Open M3U buttons, A-Z strip)
+- Virtual scrolling on the streams list — only ~30 rows in the DOM at once
+- Lazy-builds the Browse tab
+- All CSS transitions / animations / hover effects disabled
+- Replaces the desktop hint bar with a TV-friendly one mentioning the OK button and long-press
+
+Older WebOS browsers (Chromium 38–68, found on 2018–2020 model years) are also supported via:
+
+- `Promise.allSettled` polyfill
+- `Intl.DisplayNames` guard (falls back to bare country codes if the API is missing)
+- ES2015-targeted JS (no async/await, object spread, optional `catch {}`, or `class extends`)
+- An inline `window.onerror` handler that writes failures to the visible status bar — critical for diagnosis on devices without dev tools
+
 ## Local development
 
 Open `index.html` directly in a browser. Works for all default sources because `iptv-org` and `raw.githubusercontent.com` both send CORS headers.
 
-If you hit a CORS-blocked stream URL during testing, the archived `Archived/serve.ps1` provides a local dev server with a `/proxy` route. Copy it to the repo root and run:
+If you hit a CORS-blocked stream URL, the archived `Archived/serve.ps1` provides a local dev server with a `/proxy` route. Copy it to the repo root and run:
 
 ```powershell
 pwsh .\serve.ps1
