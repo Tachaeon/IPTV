@@ -15,7 +15,7 @@ A single-file web-based IPTV player. Builds a deduped, alphabetized stream list 
 - **Smart TV optimized** — auto-detects LG WebOS / Samsung Tizen / generic SmartTV; logos skipped, virtual scrolling on the streams list (~30 DOM rows vs 1500+), CSS effects killed, Browse tab lazy-built. Works on WebOS 5 (2020 LG OLED CX) and newer.
 - **Browse 200+ country/provider playlists** — pulled live from [iptv-org/iptv](https://github.com/iptv-org/iptv)
 - **Load from file or URL** — open any local `.m3u` / `.m3u8` or paste a URL
-- **Favorites** — right-click (or long-press on mouse or touch) any stream to favorite
+- **Favorites + share** — right-click (or long-press) a stream for a menu: favorite toggle, **Copy share link** (a deep link like `?play=...&name=...` that opens the app pre-tuned to that channel — uses Web Share API on mobile when available), or **Copy stream URL** (the raw `.m3u8`/`.m3u` for use in external players)
 - **Recently played** — last 10 channels tracked automatically
 - **Auto-resume** — picks up where you left off on page reload (scrolls to the playing row)
 - **Auto-skip dead streams** — fails over to the next channel after 3 seconds

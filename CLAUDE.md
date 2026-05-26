@@ -72,6 +72,8 @@ The **Reset** button in the header wipes all of these and reloads.
 - `openSettings()` / `closeSettings(e)` — show/hide the centered settings modal. Closes via X button, backdrop click, or `Esc`.
 - `exportFavorites()` — serializes `favorites` to JSON, triggers download as `tach-tv-favorites-YYYY-MM-DD.json`.
 - Favorites import handler (on `#fav-import` change) — reads + parses JSON, validates each entry has `name`+`url`, merges by URL into existing favorites (won't clobber duplicates).
+- `shareStream(url, name)` — builds a deep link (`location.origin + pathname + ?play=...&name=...`); uses `navigator.share()` on mobile when available, falls back to clipboard via `copyText()`. The deep link is auto-played by the init code (taking priority over auto-resume) and the query string is cleared via `history.replaceState` after the play so refresh doesn't redundantly re-play.
+- `copyText(text, successMsg)` — `navigator.clipboard.writeText` first, falling back to a hidden `<textarea>` + `document.execCommand('copy')` for older browsers. Reports success/failure via the status bar.
 - `toggleCinema()` — toggles `body.cinema-mode` (retracts header/footer/sidebar). `C` hotkey or visible X button or `Esc`.
 - `toggleFullscreen()` / `updateFsIcon()` — page fullscreen via `document.documentElement.requestFullscreen()`. Activity-tracked auto-hide for native `<video>` controls + cursor while in fullscreen (`fsActivity`/`fsShow`/`fsHide`, 3-second idle, capture-phase listeners on `mousemove`/`mousedown`/`click`/`keydown`/`touchstart`/`touchmove`/`wheel`).
 - `updateAzJump()` / `jumpToLetter(letter)` — rebuilds the A-Z strip's first-occurrence index after every `filterStreams()`. Short-circuits on TV (strip is hidden).
@@ -161,6 +163,10 @@ While in fullscreen, controls + cursor stay visible until 3 seconds of no input.
 ### Long-press
 
 `wireList()` supports long-press (500ms hold, < 4px movement) for both mouse and touch — opens the same context menu as right-click. The follow-up `click` after a long-press calls `e.stopPropagation()` to keep the document-level `hideCtx` handler from immediately closing the just-opened menu.
+
+### Context menu
+
+`#ctx` has three entries: favorite toggle (★ / ☆ label depending on current state), **Copy share link**, and **Copy stream URL**. Share generates a deep link `?play=<url>&name=<name>` against the current origin; the init code recognizes the params and auto-plays them (taking priority over `LAST_KEY`-based auto-resume), then clears the query via `history.replaceState`.
 
 ### Browse tab
 

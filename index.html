@@ -741,11 +741,14 @@
   <span id="status">Open an M3U file to begin</span>
   <span class="tv-hidden" style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; C: hide UI &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click or long-press: favorite</span>
   <span class="tv-only" style="margin-left:auto">Select: play &nbsp;·&nbsp; ↑/↓: cycle channels &nbsp;·&nbsp; Favorite: long press</span>
-  <span class="version" id="version">v0.7.0</span>
+  <span class="version" id="version">v0.7.1</span>
 </footer>
 
 <div id="ctx">
   <button id="ctx-fav"></button>
+  <hr>
+  <button id="ctx-share">🔗 Copy share link</button>
+  <button id="ctx-copy-url">⎘ Copy stream URL</button>
 </div>
 
 <script>
@@ -1417,11 +1420,51 @@ function showCtx(e, url, name) {
     btn.textContent = '☆ Add to Favorites';
     btn.onclick = () => { addFav(name, url); hideCtx(); };
   }
+  document.getElementById('ctx-share').onclick = () => { shareStream(url, name); hideCtx(); };
+  document.getElementById('ctx-copy-url').onclick = () => { copyText(url, 'Copied stream URL: ' + name); hideCtx(); };
   ctxEl.style.display = 'block';
   const x = Math.min(e.clientX, innerWidth  - 185);
-  const y = Math.min(e.clientY, innerHeight -  80);
+  const y = Math.min(e.clientY, innerHeight -  120);
   ctxEl.style.left = x + 'px';
   ctxEl.style.top  = y + 'px';
+}
+
+function shareStream(url, name) {
+  const link = location.origin + location.pathname + '?play=' + encodeURIComponent(url) + '&name=' + encodeURIComponent(name);
+  if (navigator.share) {
+    navigator.share({ title: name, text: 'Watch ' + name + ' on Tach TV', url: link })
+      .then(function () { setStatus('Shared: ' + name); })
+      .catch(function () { copyText(link, 'Copied share link: ' + name); });
+    return;
+  }
+  copyText(link, 'Copied share link: ' + name);
+}
+
+function copyText(text, successMsg) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(function () { setStatus(successMsg); })
+      .catch(function () { fallbackCopy(text, successMsg); });
+    return;
+  }
+  fallbackCopy(text, successMsg);
+}
+
+function fallbackCopy(text, successMsg) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    setStatus(successMsg);
+  } catch (err) {
+    setStatus('Copy unavailable; URL: ' + text);
+  }
 }
 
 function hideCtx() { ctxEl.style.display = 'none'; }
@@ -1928,6 +1971,19 @@ try {
 
 loadFromSources().then(() => {
   try {
+    // Deep-link share: ?play=<url>&name=<name> takes priority over auto-resume
+    const m = location.search.match(/[?&]play=([^&]*)/);
+    const nm = location.search.match(/[?&]name=([^&]*)/);
+    if (m && m[1]) {
+      const shareUrl = decodeURIComponent(m[1].replace(/\+/g, ' '));
+      const shareName = nm && nm[1] ? decodeURIComponent(nm[1].replace(/\+/g, ' ')) : shareUrl;
+      play(shareUrl, shareName);
+      const idxS = shownStreams.findIndex(s => s.url === shareUrl);
+      if (idxS !== -1) scrollListToIndex('lst-streams', idxS, 'center');
+      // Strip the query so refresh doesn't auto-play the same link again
+      try { history.replaceState({}, '', location.pathname); } catch (e) {}
+      return;
+    }
     const last = JSON.parse(localStorage.getItem(LAST_KEY) || 'null');
     if (!last || !last.url) return;
     const found = allStreams.find(s => s.url === last.url);
