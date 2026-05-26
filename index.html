@@ -72,6 +72,25 @@
     body.cinema-mode .sidebar {
       display: none !important;
     }
+    .cinema-exit { display: none; }
+    body.cinema-mode .cinema-exit {
+      display: flex;
+      position: fixed;
+      top: 8px;
+      right: 8px;
+      z-index: 1000;
+      width: 36px;
+      height: 36px;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    body.cinema-mode .cinema-exit:hover { background: rgba(0, 0, 0, 0.8); }
     body.is-tv .tv-hidden { display: none !important; }
     body.is-tv .az-jump { display: none; }
     .tv-only { display: none; }
@@ -499,6 +518,10 @@
 </head>
 <body>
 
+<button class="cinema-exit" onclick="toggleCinema()" title="Show UI (C or Esc)" aria-label="Show UI">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+</button>
+
 <header class="header">
   <button class="btn-icon" id="btn-toggle" onclick="toggleSidebar()" title="Toggle sidebar (T)">&#8249;</button>
   <span class="header-title">Stream Launcher</span>
@@ -603,7 +626,7 @@
   <span id="status">Open an M3U file to begin</span>
   <span class="tv-hidden" style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; C: hide UI &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click or long-press: favorite</span>
   <span class="tv-only" style="margin-left:auto">Select: play &nbsp;·&nbsp; ↑/↓: cycle channels &nbsp;·&nbsp; Favorite: long press</span>
-  <span class="version" id="version">v0.6.5</span>
+  <span class="version" id="version">v0.6.6</span>
 </footer>
 
 <div id="ctx">
