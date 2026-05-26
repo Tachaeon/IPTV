@@ -2,7 +2,7 @@
 
 A single-file web-based IPTV player. Builds a deduped, alphabetized stream list from ~50 iptv-org country/provider feeds on page load, with logos overlaid from the iptv-org region playlists. Settings menu with theme switcher and favorites import/export. Cinema mode, category filters, A-Z jump strip, auto-skip dead streams, plenty of keyboard shortcuts. Optimized for smart TVs. Optional Cloudflare Worker proxy for streams that hit browser security restrictions.
 
-**Live demo:** <https://tachaeon.github.io/IPTV/>
+**Live demo:** <https://tachaeon.github.io/TachTV/>
 
 ## Features
 

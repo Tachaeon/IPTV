@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## What this repo is
 
-A single-file IPTV web player hosted on GitHub Pages: <https://tachaeon.github.io/IPTV/>.
+A single-file IPTV web player hosted on GitHub Pages: <https://tachaeon.github.io/TachTV/>.
 
 Production-relevant files (repo root):
 
