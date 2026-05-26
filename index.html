@@ -83,14 +83,16 @@
       height: 36px;
       align-items: center;
       justify-content: center;
-      background: rgba(0, 0, 0, 0.55);
+      background: transparent;
       color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      border-radius: 6px;
+      border: none;
       cursor: pointer;
       font-family: inherit;
+      opacity: 0.5;
+      filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.7));
+      transition: opacity 0.15s;
     }
-    body.cinema-mode .cinema-exit:hover { background: rgba(0, 0, 0, 0.8); }
+    body.cinema-mode .cinema-exit:hover { opacity: 1; }
     body.is-tv .tv-hidden { display: none !important; }
     body.is-tv .az-jump { display: none; }
     .tv-only { display: none; }
@@ -626,7 +628,7 @@
   <span id="status">Open an M3U file to begin</span>
   <span class="tv-hidden" style="margin-left:auto">Click: play &nbsp;·&nbsp; ↑/↓: cycle &nbsp;·&nbsp; R: random &nbsp;·&nbsp; F: fullscreen &nbsp;·&nbsp; C: hide UI &nbsp;·&nbsp; T: sidebar &nbsp;·&nbsp; Right-click or long-press: favorite</span>
   <span class="tv-only" style="margin-left:auto">Select: play &nbsp;·&nbsp; ↑/↓: cycle channels &nbsp;·&nbsp; Favorite: long press</span>
-  <span class="version" id="version">v0.6.6</span>
+  <span class="version" id="version">v0.6.7</span>
 </footer>
 
 <div id="ctx">
