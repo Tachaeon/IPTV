@@ -1,6 +1,6 @@
-# IPTV Stream Launcher
+# Tach TV
 
-A single-file web-based IPTV player. Builds a deduped, alphabetized stream list from ~50 iptv-org country/provider feeds on page load, with logos overlaid from the iptv-org region playlists. Themes, favorites, recent list, category filters, A-Z jump strip, cinema mode, auto-skip dead streams, plenty of keyboard shortcuts. Optimized for smart TVs. Optional Cloudflare Worker proxy for streams that hit browser security restrictions.
+A single-file web-based IPTV player. Builds a deduped, alphabetized stream list from ~50 iptv-org country/provider feeds on page load, with logos overlaid from the iptv-org region playlists. Settings menu with theme switcher and favorites import/export. Cinema mode, category filters, A-Z jump strip, auto-skip dead streams, plenty of keyboard shortcuts. Optimized for smart TVs. Optional Cloudflare Worker proxy for streams that hit browser security restrictions.
 
 **Live demo:** <https://tachaeon.github.io/IPTV/>
 
@@ -8,6 +8,7 @@ A single-file web-based IPTV player. Builds a deduped, alphabetized stream list 
 
 - **Combined-sources playlist auto-loads** — 46 iptv-org feeds across US, UK, CA, AU, NZ (and provider variants: Pluto, Samsung TV Plus, BBC, Distro, Stingray, Roku, Xumo, Plex, Tubi, …) merged + deduped on page load
 - **Logo enrichment, two passes** — region aggregates (`eur`, `amer`, `oce`) supply logos; URL-keyed overlay first, then normalized-name fallback so duplicate channels share artwork
+- **Settings modal** — gear icon in the header opens a centered modal with Theme switcher, **Export / Import favorites** (JSON backup, URL-dedupe merge on import), Reset all data, and About info
 - **Five category filter chips** — toggle Pluto / Shopping / Religious / Non-English / Geo-blocked; state persists
 - **A-Z jump strip** — vertical letter strip on the left of the streams list; click to scroll to first matching channel
 - **Cinema mode** — `C` (or icon, or X overlay) retracts header / footer / sidebar for a distraction-free view
@@ -22,12 +23,11 @@ A single-file web-based IPTV player. Builds a deduped, alphabetized stream list 
 - **Group filter** — dropdown filter by `group-title` (Sports, News, Movies…)
 - **Channel cycling** — ↑/↓ to surf without taking your hand off the keyboard
 - **Random channel** — `R` to surprise yourself
-- **Three themes** — Tokyo Night (dark), Light, Gruvbox
+- **Three themes** — Tokyo Night (dark), Light, Gruvbox (picker lives in Settings)
 - **Resizable sidebar** — drag the right edge
 - **Volume persistence** — remembers your level (and mute state) across sessions
 - **Page fullscreen** — `F` key or button; native `<video>` controls + cursor auto-hide after 3s idle while in fullscreen
 - **Optional Cloudflare Worker proxy** — bypasses mixed-content / CORS so `http://` streams play on the live GH Pages site
-- **Reset button** — clear all saved data in one click
 - **Version label** in the footer; hover for last-modified timestamp
 
 ## Keyboard shortcuts

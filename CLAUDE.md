@@ -69,6 +69,9 @@ The **Reset** button in the header wipes all of these and reloads.
 - `wireList(containerId, store)` — attaches click, contextmenu, mouse long-press, touch long-press handlers.
 - `cycleChannel(dir)` — used by arrow keys + auto-skip. Cycles through whichever tab is currently active.
 - `toggleFilter(key)` — flips one of the five filter chips and re-renders. `FILTER_PREDICATES` defines the detectors (`pluto`, `shop`, `rel`, `noneng`, `geo`).
+- `openSettings()` / `closeSettings(e)` — show/hide the centered settings modal. Closes via X button, backdrop click, or `Esc`.
+- `exportFavorites()` — serializes `favorites` to JSON, triggers download as `tach-tv-favorites-YYYY-MM-DD.json`.
+- Favorites import handler (on `#fav-import` change) — reads + parses JSON, validates each entry has `name`+`url`, merges by URL into existing favorites (won't clobber duplicates).
 - `toggleCinema()` — toggles `body.cinema-mode` (retracts header/footer/sidebar). `C` hotkey or visible X button or `Esc`.
 - `toggleFullscreen()` / `updateFsIcon()` — page fullscreen via `document.documentElement.requestFullscreen()`. Activity-tracked auto-hide for native `<video>` controls + cursor while in fullscreen (`fsActivity`/`fsShow`/`fsHide`, 3-second idle, capture-phase listeners on `mousemove`/`mousedown`/`click`/`keydown`/`touchstart`/`touchmove`/`wheel`).
 - `updateAzJump()` / `jumpToLetter(letter)` — rebuilds the A-Z strip's first-occurrence index after every `filterStreams()`. Short-circuits on TV (strip is hidden).
@@ -124,6 +127,17 @@ A 14px-wide vertical strip on the *left* side of the streams list with 26 letter
 ### Themes
 
 CSS variables in `:root` define the default (Tokyo Night). Alternate themes are `[data-theme="light"]` and `[data-theme="gruvbox"]` blocks. An early-paint script in `<head>` reads `localStorage.theme` and sets the `data-theme` attribute *before* the body renders to avoid a flash of wrong theme. A `--on-accent` variable handles text on accent-color buttons across themes.
+
+### Settings modal
+
+A centered overlay (`.modal-backdrop` + `.modal`) triggered by the gear icon in the header. Four sections:
+
+- **Appearance** — theme `<select>` (was previously in the header)
+- **Favorites** — Export to dated JSON, Import from JSON (URL-dedupe merge)
+- **Data** — Reset all saved data (was previously in the header, now danger-styled)
+- **About** — version + `document.lastModified`
+
+Closes on X click, click outside the inner modal (handled in `closeSettings(e)` by checking `e.target === backdrop`), or `Esc`. Moving theme + reset into the modal de-cluttered the header significantly.
 
 ### Cinema mode
 
